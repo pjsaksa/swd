@@ -1,0 +1,11 @@
+#!/bin/bash tr_exec.sh
+
+swd_info() {
+    cat <<EndOfInfo
+{
+  "artifacts": {
+    "install-dir" : { "type": "directory", "path": "$TR_WORK/build", "managed": true }
+  }
+}
+EndOfInfo
+}
