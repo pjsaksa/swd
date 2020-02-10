@@ -733,14 +733,25 @@ namespace
                 if (m_interactive) {
                     std::cout << "exec '" << tools::conjurePath(step) << "' ? [Y]: " << std::flush;
 
-                    std::string line;
-                    std::cin >> line;
+                    std::string token;
 
-                    utils::tolower(line);
+                    {
+                        std::string line;
 
-                    if (!(line.empty()
-                          || line == "y"
-                          || line == "yes"))
+                        if (!getline(std::cin, line)) {
+                            throw std::runtime_error("input reading failed");
+                        }
+
+                        std::istringstream issLine(line);
+
+                        issLine >> token;   // ignore errors
+                    }
+
+                    utils::tolower(token);
+
+                    if (!(token.empty()
+                          || token == "y"
+                          || token == "yes"))
                     {
                         m_iterationLimit = 0;
                         return;
