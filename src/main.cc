@@ -43,28 +43,23 @@ namespace
             "        swd - scripts with dependencies\n"
             "\n"
             "SYNOPSIS\n"
-            "        swd (--help | -?)\n"
-            "        swd [-C <path>] (--list-steps | --list-artifacts | " << Args::next_L << " | " << Args::next_S << ")\n"
-            "        swd [-C <path>] (" << Args::undo_L << "=<step> | " << Args::undo_S << " <step>)\n"
-            "        swd [-C <path>] (" << Args::force_L << "=<step> | " << Args::force_S << " <step>)\n"
-            "        swd [-C <path>] [" << Args::step_L << "=<n> | " << Args::step_S << " <n>]\n"
-            "        swd [-C <path>] [" << Args::interactive_L << "=<n> | " << Args::interactive_S << " <n>]\n"
+            "        swd [ options... ] [ function ]\n"
             "\n"
-            "OPTIONS\n"
+            "FUNCTIONS\n"
+            "        (default)\n"
+            "            Execute all incomplete steps.\n"
+            "\n"
             "        --help | -?\n"
-            "            Print this help text (and exit).\n"
-            "\n"
-            "        -C <path>\n"
-            "            Run as if swd was started in <path> instead of the current working directory.\n"
+            "            Print this help text.\n"
             "\n"
             "        --list-steps\n"
-            "            List all known steps (and exit).\n"
+            "            List all known steps.\n"
             "\n"
             "        --list-artifacts\n"
-            "            List all known artifacts (and exit).\n"
+            "            List all known artifacts.\n"
             "\n"
             "        " << Args::next_L << " | " << Args::next_S << "\n"
-            "            Print which step would be run next (and exit).\n"
+            "            Print the name of the next step, but do not execute it.\n"
             "\n"
             "        " << Args::undo_L << "=<step> | " << Args::undo_S << " <step>\n"
             "            Mark <step> as incomplete.\n"
@@ -76,14 +71,18 @@ namespace
             "            Stop after executing <n> steps.\n"
             "\n"
             "        " << Args::interactive_L << " | " << Args::interactive_S << "\n"
-            "            Execute steps interactively.\n";
+            "            Execute steps interactively.\n"
+            "\n"
+            "OPTIONS\n"
+            "        -C <path>\n"
+            "            Run swd as if it was started in <path>.\n";
     }
 
     // -----
 
-    class OperationMode {
+    class MainFunction {
     public:
-        virtual ~OperationMode() = default;
+        virtual ~MainFunction() = default;
         virtual void execute(Master& master) = 0;
     };
 
@@ -91,7 +90,7 @@ namespace
 
     namespace Oper
     {
-        class ListArtifacts : public OperationMode {
+        class ListArtifacts : public MainFunction {
         public:
             void execute(Master& master) override
             {
@@ -101,7 +100,7 @@ namespace
 
         //
 
-        class ListSteps : public OperationMode {
+        class ListSteps : public MainFunction {
         public:
             void execute(Master& master) override
             {
@@ -112,7 +111,7 @@ namespace
 
         //
 
-        class ExecuteSteps : public OperationMode {
+        class ExecuteSteps : public MainFunction {
         public:
             ExecuteSteps() = default;
             ExecuteSteps(int steps)
@@ -132,7 +131,7 @@ namespace
 
         //
 
-        class ShowNext : public OperationMode {
+        class ShowNext : public MainFunction {
         public:
             void execute(Master& master) override
             {
@@ -145,7 +144,7 @@ namespace
 
         //
 
-        class Undo : public OperationMode {
+        class Undo : public MainFunction {
         public:
             Undo(const std::string& stepName)
                 : m_stepName(stepName) {}
@@ -162,7 +161,7 @@ namespace
 
         //
 
-        class Force : public OperationMode {
+        class Force : public MainFunction {
         public:
             Force(const std::string& stepName)
                 : m_stepName(stepName) {}
@@ -179,7 +178,7 @@ namespace
 
         //
 
-        class Interactive : public OperationMode {
+        class Interactive : public MainFunction {
         public:
             void execute(Master& master) override
             {
@@ -272,7 +271,7 @@ namespace
 
     //
 
-    std::unique_ptr<OperationMode> parseArguments(const std::vector<std::string>& args)
+    std::unique_ptr<MainFunction> parseArguments(const std::vector<std::string>& args)
     {
         for (const auto& arg : args)
         {
@@ -286,7 +285,7 @@ namespace
 
         //
 
-        std::unique_ptr<OperationMode> operationMode;
+        std::unique_ptr<MainFunction> mainFunction;
 
         for (auto iter = args.begin();
              iter != args.end();
@@ -304,44 +303,44 @@ namespace
             }
             else if (longArgMatches(*iter, "--list-steps", false))
             {
-                if (operationMode) {
+                if (mainFunction) {
                     throw std::runtime_error("second argument declaring main function: " + *iter);
                 }
 
-                operationMode = std::make_unique<Oper::ListSteps>();
+                mainFunction = std::make_unique<Oper::ListSteps>();
             }
             else if (longArgMatches(*iter, "--list-artifacts", false))
             {
-                if (operationMode) {
+                if (mainFunction) {
                     throw std::runtime_error("second argument declaring main function: " + *iter);
                 }
 
-                operationMode = std::make_unique<Oper::ListArtifacts>();
+                mainFunction = std::make_unique<Oper::ListArtifacts>();
             }
             else if (*iter == Args::next_S
                      || longArgMatches(*iter, Args::next_L, false))
             {
-                if (operationMode) {
+                if (mainFunction) {
                     throw std::runtime_error("second argument declaring main function: " + *iter);
                 }
 
-                operationMode = std::make_unique<Oper::ShowNext>();
+                mainFunction = std::make_unique<Oper::ShowNext>();
             }
             else if (*iter == Args::interactive_S
                      || longArgMatches(*iter, Args::interactive_L, false))
             {
-                if (operationMode) {
+                if (mainFunction) {
                     throw std::runtime_error("second argument declaring main function: " + *iter);
                 }
 
-                operationMode = std::make_unique<Oper::Interactive>();
+                mainFunction = std::make_unique<Oper::Interactive>();
             }
             else if (*iter == Args::step_S
                      || longArgMatches(*iter, Args::step_L, true))
             {
                 const std::string argumentInfo = Args::step_L + "/" + Args::step_S;
 
-                if (operationMode) {
+                if (mainFunction) {
                     throw std::runtime_error("second argument declaring main function: " + argumentInfo);
                 }
 
@@ -353,7 +352,7 @@ namespace
                 if (iss >> n
                     && n > 0)
                 {
-                    operationMode = std::make_unique<Oper::ExecuteSteps>( n );
+                    mainFunction = std::make_unique<Oper::ExecuteSteps>( n );
                 }
                 else {
                     throw std::runtime_error("value for " + argumentInfo + " must be a positive number");
@@ -364,7 +363,7 @@ namespace
             {
                 const std::string argumentInfo = Args::undo_L + "/" + Args::undo_S;
 
-                if (operationMode) {
+                if (mainFunction) {
                     throw std::runtime_error("second argument declaring main function: " + argumentInfo);
                 }
 
@@ -372,14 +371,14 @@ namespace
 
                 const std::string unitName = extractArgumentValue(args, iter, Args::undo_L, Args::undo_S, argumentInfo);
 
-                operationMode = std::make_unique<Oper::Undo>( unitName );
+                mainFunction = std::make_unique<Oper::Undo>( unitName );
             }
             else if (*iter == Args::force_S
                      || longArgMatches(*iter, Args::force_L, true))
             {
                 const std::string argumentInfo = Args::force_L + "/" + Args::force_S;
 
-                if (operationMode) {
+                if (mainFunction) {
                     throw std::runtime_error("second argument declaring main function: " + argumentInfo);
                 }
 
@@ -387,15 +386,15 @@ namespace
 
                 const std::string unitName = extractArgumentValue(args, iter, Args::force_L, Args::force_S, argumentInfo);
 
-                operationMode = std::make_unique<Oper::Force>( unitName );
+                mainFunction = std::make_unique<Oper::Force>( unitName );
             }
             else {
                 throw std::runtime_error("invalid argument '" + *iter + "'");
             }
         }
 
-        return (operationMode
-                ? std::move(operationMode)
+        return (mainFunction
+                ? std::move(mainFunction)
                 : std::make_unique<Oper::ExecuteSteps>());
     }
 }
@@ -408,13 +407,13 @@ int main(const int argc,
     const std::vector<std::string> args(argv + 1, argv + argc);
 
     try {
-        const auto operMode = parseArguments(args);
+        const auto mainFunction = parseArguments(args);
 
         //
 
         Master& master = Master::instance();
 
-        operMode->execute(master);
+        mainFunction->execute(master);
     }
     catch (std::exception& e) {
         std::cerr << e.what() << std::endl;
