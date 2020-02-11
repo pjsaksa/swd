@@ -48,6 +48,9 @@ ArtifactDir::ArtifactDir(const std::string& name,
 
 std::string ArtifactDir::calculateHash() const
 {
+    using std::flush;
+    //
+
     if (access(m_path.c_str(), X_OK) != 0) {
         return TargetDoesNotExist;
     }
@@ -56,17 +59,30 @@ std::string ArtifactDir::calculateHash() const
             std::ostringstream cmdOss;
             utils::escape_bash cmdEsc(cmdOss);
 
-            cmdOss << "find " << std::flush;
-            cmdEsc << m_path << std::flush;
+            cmdOss << "find " << flush;
+            cmdEsc << m_path << flush;
 
-            for (const auto& ex : m_exclude)
+            if (!m_exclude.empty())
             {
-                cmdOss << " -path " << std::flush;
-                cmdEsc << ex << std::flush;
-                cmdOss << " -prune -o" << std::flush;
+                auto iter = m_exclude.begin();
+
+                cmdOss << " '(' -path " << flush;      // without -o
+                cmdEsc << *iter << flush;
+                cmdOss << " -prune" << flush;
+
+                for (++iter;
+                     iter != m_exclude.end();
+                     ++iter)
+                {
+                    cmdOss << " -o -path " << flush;       // with -o
+                    cmdEsc << *iter << flush;
+                    cmdOss << " -prune" << flush;
+                }
+
+                cmdOss << " ')' -o" << flush;
             }
 
-            cmdOss << " -printf '%s\\t%t\\t%p\\n'" << std::flush;
+            cmdOss << " -type f -a -printf '%s\\t%t\\t%p\\n'";
 
             cmdOss.str();
         });
