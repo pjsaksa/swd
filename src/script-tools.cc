@@ -758,9 +758,8 @@ namespace
                     }
                 }
 
-                doExecute(step);
-
-                step.recalculateHashes(m_master);
+                doExecute(m_master,
+                          step);
 
                 //
 
@@ -772,7 +771,8 @@ namespace
 
         //
 
-        static void doExecute(Step& step)
+        static void doExecute(Master& master,
+                              Step& step)
         {
             const auto& conf = Config::instance();
 
@@ -788,6 +788,7 @@ namespace
                 && !conf.interrupted)
             {
                 step.complete();
+                step.recalculateHashes(master);
             }
             else {
                 throw std::runtime_error("step '" + tools::conjureExec(step) + "' failed");
@@ -983,6 +984,9 @@ namespace
 
     class force_step : public UnitVisitor {
     public:
+        force_step(Master& master)
+            : m_master(master) {}
+
         void operator() (Group&) const override
         {
             std::cout << "Only single steps can be forced." << std::endl;
@@ -997,8 +1001,12 @@ namespace
         {
             std::cout << "Forcing step " << tools::conjurePath(step) << std::endl;
 
-            scoped_execute::doExecute(step);
+            scoped_execute::doExecute(m_master,
+                                      step);
         }
+
+    private:
+        Master& m_master;
     };
 }
 
@@ -1011,5 +1019,5 @@ void tools::undo(Master& master, const std::string& stepName)
 void tools::force(Master& master, const std::string& stepName)
 {
     master.root->visit(find_unit(stepName,
-                                 force_step()));
+                                 force_step(master)));
 }
