@@ -90,7 +90,9 @@ void Artifact::recalculate(const std::string& stepName)
 {
     storeHash( calculateHash() );
 
-    if (m_manager) {
+    if (!stepName.empty()
+        && m_manager)
+    {
         if (m_manager->stepFound(stepName)) {
             throw std::runtime_error("Touching managed artifact '" + m_name + "' with step '" + stepName + "' which already exists in managed step list");
         }

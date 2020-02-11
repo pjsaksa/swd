@@ -28,6 +28,8 @@ namespace
         const std::string interactive_S = "-i";
         const std::string next_L        = "--next";
         const std::string next_S        = "-n";
+        const std::string rehash_L      = "--rehash";
+        const std::string rehash_S      = "-r";
         const std::string step_L        = "--step";
         const std::string step_S        = "-s";
         const std::string undo_L        = "--undo";
@@ -72,6 +74,9 @@ namespace
             "\n"
             "        " << Args::interactive_L << " | " << Args::interactive_S << "\n"
             "            Execute steps interactively.\n"
+            "\n"
+            "        " << Args::rehash_L << "=<artifact> | " << Args::rehash_S << " <artifact>\n"
+            "            Rehash (validate) artifact.\n"
             "\n"
             "OPTIONS\n"
             "        -C <path>\n"
@@ -187,6 +192,24 @@ namespace
                                false,
                                true);
             }
+        };
+
+        //
+
+        class RehashArtifact : public MainFunction {
+        public:
+            RehashArtifact(const std::string& name)
+                : m_artifactName(name) {}
+
+            void execute(Master& master) override
+            {
+                auto& artifact = master.artifact(m_artifactName);
+
+                artifact.recalculate({});
+            }
+
+        private:
+            std::string m_artifactName;
         };
     }
 
@@ -387,6 +410,21 @@ namespace
                 const std::string unitName = extractArgumentValue(args, iter, Args::force_L, Args::force_S, argumentInfo);
 
                 mainFunction = std::make_unique<Oper::Force>( unitName );
+            }
+            else if (*iter == Args::rehash_S
+                     || longArgMatches(*iter, Args::rehash_L, true))
+            {
+                const std::string argumentInfo = Args::rehash_L + "/" + Args::rehash_S;
+
+                if (mainFunction) {
+                    throw std::runtime_error("second argument declaring main function: " + argumentInfo);
+                }
+
+                //
+
+                const std::string artifactName = extractArgumentValue(args, iter, Args::rehash_L, Args::rehash_S, argumentInfo);
+
+                mainFunction = std::make_unique<Oper::RehashArtifact>( artifactName );
             }
             else {
                 throw std::runtime_error("invalid argument '" + *iter + "'");
