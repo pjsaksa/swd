@@ -259,7 +259,9 @@ namespace
 
                     //
 
-                    const std::string artifactName = unitName + '/' + key;
+                    const std::string artifactName = ( !unitName.empty()
+                                                       ? unitName + '/' + key
+                                                       : key );
 
                     checkArtifactSanity(artifactName,
                                         key,
