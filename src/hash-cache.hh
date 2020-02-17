@@ -86,9 +86,9 @@ class Dependency : public HashCache {
 public:
     const std::string& id() const;
 
-    virtual std::string type() const = 0;
+    bool isUpToDate() const;
 
-    virtual bool isUpToDate() const = 0;
+    virtual std::string type() const = 0;
 
 protected:
     std::string m_id;

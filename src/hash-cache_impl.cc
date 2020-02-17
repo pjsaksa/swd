@@ -111,11 +111,6 @@ std::string DependencyArtifact::type() const
     return "artifact";
 }
 
-bool DependencyArtifact::isUpToDate() const
-{
-    return m_master.artifact(m_id).compareHash(calculateHash());
-}
-
 // ------------------------------------------------------------
 
 DependencyData::DependencyData(const std::string& id,
@@ -133,11 +128,6 @@ std::string DependencyData::calculateHash() const
 std::string DependencyData::type() const
 {
     return "data";
-}
-
-bool DependencyData::isUpToDate() const
-{
-    return compareHash(calculateHash());
 }
 
 // ------------------------------------------------------------
@@ -164,9 +154,4 @@ std::string DependencyFile::calculateHash() const
 std::string DependencyFile::type() const
 {
     return "file";
-}
-
-bool DependencyFile::isUpToDate() const
-{
-    return compareHash(calculateHash());
 }

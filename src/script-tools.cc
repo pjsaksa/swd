@@ -537,10 +537,6 @@ namespace
 
                 step.forEachDependency([&j_deps] (Dependency& dep)
                                        {
-                                           if (dep.type() == "artifact") {
-                                               return;
-                                           }
-
                                            for (auto j_iter = j_deps.begin();
                                                 j_iter != j_deps.end();
                                                 ++j_iter)
@@ -625,10 +621,6 @@ namespace
 
             step.forEachDependency([&j_deps, &didSomething] (Dependency& dep)
                                    {
-                                       if (dep.type() == "artifact") {
-                                           return;
-                                       }
-
                                        j_deps.push_back(dep);
                                        didSomething = true;
                                    });

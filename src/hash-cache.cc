@@ -160,6 +160,11 @@ const std::string &Dependency::id() const
     return m_id;
 }
 
+bool Dependency::isUpToDate() const
+{
+    return compareHash(calculateHash());
+}
+
 Dependency::Dependency(const std::string& id)
     : m_id(id)
 {

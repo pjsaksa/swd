@@ -54,8 +54,6 @@ public:
 
     std::string type() const override;
 
-    bool isUpToDate() const override;
-
 private:
     Master& m_master;
 };
@@ -71,8 +69,6 @@ public:
 
     std::string type() const override;
 
-    bool isUpToDate() const override;
-
 private:
     std::string m_data;
 };
@@ -87,8 +83,6 @@ public:
     std::string calculateHash() const override;
 
     std::string type() const override;
-
-    bool isUpToDate() const override;
 
 private:
     std::string m_path;
