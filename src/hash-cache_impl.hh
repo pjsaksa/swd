@@ -20,6 +20,7 @@ class Master;
 class ArtifactFile : public Artifact {
 public:
     ArtifactFile(const std::string& name,
+                 const std::string& scope,
                  const std::string& path);
 
     std::string calculateHash() const override;
@@ -33,6 +34,7 @@ private:
 class ArtifactDir : public Artifact {
 public:
     ArtifactDir(const std::string& name,
+                const std::string& scope,
                 const std::string& path,
                 std::vector<std::string>&& exclude);
 

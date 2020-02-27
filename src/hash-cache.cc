@@ -7,8 +7,10 @@
 #include "hash-cache.hh"
 
 #include "master.hh"
+#include "script-tools.hh"
 #include "script.hh"
 
+#include <algorithm>
 #include <set>
 #include <stdexcept>
 
@@ -43,14 +45,6 @@ std::string HashCache::getHashSum() const
 
 class Artifact::Manager {
 public:
-    Manager(const std::string& s)
-        : m_scope(s) {}
-
-    const std::string& scope() const
-    {
-        return m_scope;
-    }
-
     void touch(const std::string& stepName)
     {
         m_steps.insert(stepName);
@@ -61,8 +55,15 @@ public:
         return m_steps.count(stepName) > 0;
     }
 
-    void invalidate()
+    void invalidate(Master& master)
     {
+        std::for_each(m_steps.begin(),
+                      m_steps.end(),
+                      [&master] (const std::string& stepName)
+                      {
+                          tools::undo(master, stepName);
+                      });
+
         m_steps.clear();
     }
 
@@ -73,7 +74,6 @@ public:
     }
 
 private:
-    std::string m_scope;
     std::set<std::string> m_steps;
 };
 
@@ -101,10 +101,10 @@ void Artifact::recalculate(const std::string& stepName)
     }
 }
 
-void Artifact::setManaged(const std::string& scope)
+void Artifact::setManaged()
 {
     if (!m_manager) {
-        m_manager = std::make_unique<Manager>(scope);
+        m_manager = std::make_unique<Manager>();
     }
 }
 
@@ -117,39 +117,56 @@ void Artifact::setTouched(const std::string& stepName)
 
 std::vector<std::string> Artifact::getManagedList() const
 {
-    return m_manager
-        ? m_manager->getAsVector()
-        : std::vector<std::string>();
+    return ( m_manager
+             ? m_manager->getAsVector()
+             : std::vector<std::string>() );
 }
 
-bool Artifact::checkInvalidation(const std::string& stepName,
+bool Artifact::checkInvalidation(Master& master,
+                                 const std::string& stepName,
                                  bool rebuildNeeded)
 {
+    // for managed artifacts, maybe rebuild more stuff
+
     if (m_manager)
     {
         const bool found = m_manager->stepFound(stepName);
 
-        if (!found)
-        {
-            // rebuild step
-
-            return false;
-        }
-        else if (rebuildNeeded)
+        if (found
+            && rebuildNeeded)
         {
             // invalidate artifact and rebuild scope
 
-            m_manager->invalidate();
+            m_manager->invalidate(master);
 
-            throw invalidate_scope(m_manager->scope());
+            throw invalidate_scope(m_scope);
+        }
+        else if (!found &&
+                 !rebuildNeeded)
+        {
+            throw std::runtime_error("Step is not touched in managed artifact, but step rebuild is not needed ... rebuild SHOULD be needed; step=" + stepName);
+        }
+    }
+
+    // rebuild all linked steps if artifact is not 'up to date'
+
+    if (rebuildNeeded
+        && !compareHash(calculateHash()))
+    {
+        auto count = tools::rebuildArtifact(master, name());
+
+        if (count > 0) {
+            throw invalidate_scope(m_scope);
         }
     }
 
     return true;    // no effect: rebuildNeeded applies
 }
 
-Artifact::Artifact(const std::string& name)
-    : m_name(name)
+Artifact::Artifact(const std::string& name,
+                   const std::string& scope)
+    : m_name(name),
+      m_scope(scope)
 {
 }
 

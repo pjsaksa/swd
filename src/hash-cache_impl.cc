@@ -17,8 +17,9 @@
 #include <unistd.h>
 
 ArtifactFile::ArtifactFile(const std::string& name,
+                           const std::string& scope,
                            const std::string& path)
-    : Artifact(name),
+    : Artifact(name, scope),
       m_path(path)
 {
 }
@@ -38,9 +39,10 @@ std::string ArtifactFile::calculateHash() const
 // ------------------------------------------------------------
 
 ArtifactDir::ArtifactDir(const std::string& name,
+                         const std::string& scope,
                          const std::string& path,
                          std::vector<std::string>&& exclude)
-    : Artifact(name),
+    : Artifact(name, scope),
       m_path(path),
       m_exclude(std::move( exclude ))
 {

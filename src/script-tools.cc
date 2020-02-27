@@ -277,6 +277,7 @@ namespace
                     if (type == "file")
                     {
                         artifact = new ArtifactFile(artifactName,
+                                                    unitName,
                                                     path);
                     }
                     else if (type == "directory")
@@ -291,6 +292,7 @@ namespace
                         }
 
                         artifact = new ArtifactDir(artifactName,
+                                                   unitName,
                                                    path,
                                                    std::move( excludeDirs ));
                     }
@@ -303,7 +305,7 @@ namespace
                     if (value.count("managed") > 0
                         && value["managed"].get<bool>() == true)
                     {
-                        artifact->setManaged(unitName);
+                        artifact->setManaged();
                     }
                 }
             }
@@ -693,13 +695,36 @@ namespace
 
         restart_scope:
             try {
-                group.forEachChild( *this );
+                group.visitChildren( *this );
             }
             catch (const invalidate_scope& scopeEx)
             {
                 const std::string groupName = tools::conjurePath(group);
 
                 if (scopeEx.scope() == groupName) {
+                    goto restart_scope;
+                }
+                else {
+                    throw;
+                }
+            }
+        }
+
+        void operator() (Script& script) const override
+        {
+            if (m_iterationLimit == 0) {
+                return;
+            }
+
+        restart_scope:
+            try {
+                script.visitChildren( *this );
+            }
+            catch (const invalidate_scope& scopeEx)
+            {
+                const std::string scriptName = tools::conjurePath(script);
+
+                if (scopeEx.scope() == scriptName) {
                     goto restart_scope;
                 }
                 else {
@@ -1014,4 +1039,52 @@ void tools::force(Master& master, const std::string& stepName)
 {
     master.root->visit(find_unit(stepName,
                                  force_step(master)));
+}
+
+// ------------------------------------------------------------
+
+namespace
+{
+    class rebuild_artifact : public UnitVisitor {
+    public:
+        rebuild_artifact(const std::string& artifact)
+            : m_artifact(artifact) {}
+
+        void operator() (Step& step) const override
+        {
+            if (step.isCompleted()
+                && step.hasArtifact(m_artifact))
+            {
+                if (m_count == 0) {
+                    std::cout << "Rebuilding artifact " << m_artifact << std::endl;
+                }
+
+                std::cout << "-> Undoing step " << tools::conjurePath(step) << std::endl;
+
+                //
+
+                step.undo();
+
+                ++m_count;
+            }
+        }
+
+        unsigned int count() const
+        {
+            return m_count;
+        }
+
+    private:
+        const std::string& m_artifact;
+        mutable unsigned int m_count = 0;
+    };
+}
+
+unsigned int tools::rebuildArtifact(Master& master, const std::string& artifactName)
+{
+    rebuild_artifact rebuilder(artifactName);
+
+    master.root->forEach(rebuilder);
+
+    return rebuilder.count();
 }

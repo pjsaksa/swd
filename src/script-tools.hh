@@ -29,4 +29,6 @@ namespace tools
 
     void undo(Master& master, const std::string& stepName);
     void force(Master& master, const std::string& stepName);
+
+    unsigned int rebuildArtifact(Master& master, const std::string& artifactName);
 }

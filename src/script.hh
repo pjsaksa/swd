@@ -66,6 +66,8 @@ public:
     void add(unique_unit_t&& unit);
 
     void visit(const UnitVisitor& visitor) override;
+    void visitChildren(const UnitVisitor& visitor);
+
     void forEach(const UnitVisitor& visitor) override;
     void forEachChild(const UnitVisitor& visitor);
     Unit* findUnit(const std::string& name);
@@ -116,6 +118,7 @@ public:
     void add(unique_step_t&& step);
 
     void visit(const UnitVisitor& visitor) override;
+    void visitChildren(const UnitVisitor& visitor);
     void forEach(const UnitVisitor& visitor) override;
     Step* findStep(const std::string& name);
 
@@ -137,6 +140,7 @@ public:
     void complete();
     void undo();
 
+    bool hasArtifact(const std::string& artifact);
     void addArtifact(const std::string& artifact);
     void addDependency(unique_dependency_t&& dependency);
 

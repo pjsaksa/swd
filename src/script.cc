@@ -58,6 +58,14 @@ void Group::visit(const UnitVisitor& visitor)
     visitor(*this);
 }
 
+void Group::visitChildren(const UnitVisitor& visitor)
+{
+    for (auto& u : m_units)
+    {
+        u->visit(visitor);
+    }
+}
+
 void Group::forEach(const UnitVisitor& visitor)
 {
     visit(visitor);
@@ -204,6 +212,14 @@ void Script::visit(const UnitVisitor& visitor)
     visitor(*this);
 }
 
+void Script::visitChildren(const UnitVisitor& visitor)
+{
+    for (auto& step : m_steps)
+    {
+        step->visit(visitor);
+    }
+}
+
 void Script::forEach(const UnitVisitor& visitor)
 {
     visit(visitor);
@@ -254,6 +270,13 @@ void Step::undo()
     m_parent->undoStep(name());
 }
 
+bool Step::hasArtifact(const std::string& artifact)
+{
+    return std::find(m_artifacts.begin(),
+                     m_artifacts.end(),
+                     artifact) != m_artifacts.end();
+}
+
 void Step::addArtifact(const std::string& artifact)
 {
     m_artifacts.push_back(artifact);
@@ -300,7 +323,8 @@ bool Step::everythingUpToDate(Master& master)
     {
         auto& artifact = master.artifact(artName);
 
-        if (!artifact.checkInvalidation(stepName,
+        if (!artifact.checkInvalidation(master,
+                                        stepName,
                                         !upToDateSoFar))        // !upToDateSoFar == rebuildNeeded
         {
             upToDateSoFar = false;

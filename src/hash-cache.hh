@@ -10,10 +10,9 @@
 #include <string>
 #include <vector>
 
-// forward declarations
+//
 
 class Master;
-class Step;
 
 //
 
@@ -65,18 +64,21 @@ public:
 
     void recalculate(const std::string& stepName);
 
-    void setManaged(const std::string& scope);
+    void setManaged();
     void setTouched(const std::string& stepName);
     std::vector<std::string> getManagedList() const;
 
-    bool checkInvalidation(const std::string& stepName,
+    bool checkInvalidation(Master& master,
+                           const std::string& stepName,
                            bool rebuildNeeded);
 
 protected:
-    Artifact(const std::string& name);
+    Artifact(const std::string& name,
+             const std::string& scope);
 
 private:
     std::string m_name;
+    std::string m_scope;
     std::unique_ptr<Manager> m_manager;
 };
 
