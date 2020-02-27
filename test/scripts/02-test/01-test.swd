@@ -1,7 +1,0 @@
-#!/bin/bash tr_exec.sh
-
-swd_info() {
-    cat <<EndOfInfo
-{}
-EndOfInfo
-}

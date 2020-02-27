@@ -1,0 +1,27 @@
+#!/bin/bash tr_exec.sh
+
+step1() {
+    echo "running $func_name"
+}
+
+step2() {
+    echo "running $func_name"
+}
+
+step3() {
+    echo "running $func_name"
+}
+
+############################################################
+
+swd_info() {
+    cat <<EndOfInfo
+{
+  "steps": [
+    { "name": "step1" },
+    { "name": "step2" },
+    { "name": "step3" }
+  ]
+}
+EndOfInfo
+}

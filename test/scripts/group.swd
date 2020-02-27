@@ -4,7 +4,7 @@ swd_info() {
     cat <<EndOfInfo
 {
   "artifacts": {
-    "install-dir" : { "type": "directory", "path": "$TR_WORK/build", "managed": true }
+    "tmp-dir" : { "type": "directory", "path": "$TR/tmp", "managed": true }
   }
 }
 EndOfInfo

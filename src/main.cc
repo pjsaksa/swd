@@ -34,6 +34,10 @@ namespace
         const std::string step_S        = "-s";
         const std::string undo_L        = "--undo";
         const std::string undo_S        = "-u";
+
+#ifndef NDEBUG
+        const std::string regression_L  = "--regression-test";
+#endif
     }
 
     //
@@ -211,6 +215,18 @@ namespace
         private:
             std::string m_artifactName;
         };
+
+        //
+
+#ifndef NDEBUG
+        class RegressionTest : public MainFunction {
+        public:
+            void execute(Master& ) override
+            {
+
+            }
+        };
+#endif
     }
 
     //
@@ -304,6 +320,12 @@ namespace
                 printUsage();
                 exit(0);
             }
+#ifndef NDEBUG
+            else if (arg == Args::regression_L)
+            {
+                return std::make_unique<Oper::RegressionTest>();
+            }
+#endif
         }
 
         //
