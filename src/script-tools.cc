@@ -803,11 +803,13 @@ namespace
 
             std::cout << process.read().rdbuf();
 
-            if (process.wait()
-                && !conf.interrupted)
-            {
+            const bool success = (process.wait()
+                                  && !conf.interrupted);
+
+            step.recalculateHashes(master);
+
+            if (success) {
                 step.complete();
-                step.recalculateHashes(master);
             }
             else {
                 throw std::runtime_error("step '" + tools::conjureExec(step) + "' failed");
