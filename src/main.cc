@@ -22,8 +22,6 @@ namespace
 {
     namespace Args
     {
-        const std::string force_L       = "--force";
-        const std::string force_S       = "-f";
         const std::string interactive_L = "--interactive";
         const std::string interactive_S = "-i";
         const std::string next_L        = "--next";
@@ -65,9 +63,6 @@ namespace
             "\n"
             "        " << Args::undo_L << "=<step> | " << Args::undo_S << " <step>\n"
             "            Mark <step> as incomplete.\n"
-            "\n"
-            "        " << Args::force_L << "=<step> | " << Args::force_S << " <step>\n"
-            "            Forcibly run <step> without any regards for dependencies. User Knows Best[TM].\n"
             "\n"
             "        " << Args::step_L << "=<n> | " << Args::step_S << " <n>\n"
             "            Stop after executing <n> steps.\n"
@@ -158,23 +153,6 @@ namespace
             {
                 tools::undo(master,
                             m_stepName);
-            }
-
-        private:
-            std::string m_stepName;
-        };
-
-        //
-
-        class Force : public MainFunction {
-        public:
-            Force(const std::string& stepName)
-                : m_stepName(stepName) {}
-
-            void execute(Master& master) override
-            {
-                tools::force(master,
-                             m_stepName);
             }
 
         private:
@@ -395,21 +373,6 @@ namespace
                 const std::string unitName = extractArgumentValue(args, iter, Args::undo_L, Args::undo_S, argumentInfo);
 
                 mainFunction = std::make_unique<Oper::Undo>( unitName );
-            }
-            else if (*iter == Args::force_S
-                     || longArgMatches(*iter, Args::force_L, true))
-            {
-                const std::string argumentInfo = Args::force_L + "/" + Args::force_S;
-
-                if (mainFunction) {
-                    throw std::runtime_error("second argument declaring main function: " + argumentInfo);
-                }
-
-                //
-
-                const std::string unitName = extractArgumentValue(args, iter, Args::force_L, Args::force_S, argumentInfo);
-
-                mainFunction = std::make_unique<Oper::Force>( unitName );
             }
             else if (*iter == Args::rehash_S
                      || longArgMatches(*iter, Args::rehash_L, true))

@@ -998,47 +998,12 @@ namespace
             step.undo();
         }
     };
-
-    // -----
-
-    class force_step : public UnitVisitor {
-    public:
-        force_step(Master& master)
-            : m_master(master) {}
-
-        void operator() (Group&) const override
-        {
-            std::cout << "Only single steps can be forced." << std::endl;
-        }
-
-        void operator() (Script&) const override
-        {
-            std::cout << "Only single steps can be forced." << std::endl;
-        }
-
-        void operator() (Step& step) const override
-        {
-            std::cout << "Forcing step " << tools::conjurePath(step) << std::endl;
-
-            scoped_execute::doExecute(m_master,
-                                      step);
-        }
-
-    private:
-        Master& m_master;
-    };
 }
 
 void tools::undo(Master& master, const std::string& stepName)
 {
     master.root->visit(find_unit(stepName,
                                  undo_step()));
-}
-
-void tools::force(Master& master, const std::string& stepName)
-{
-    master.root->visit(find_unit(stepName,
-                                 force_step(master)));
 }
 
 // ------------------------------------------------------------

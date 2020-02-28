@@ -28,7 +28,6 @@ namespace tools
     void listSteps(Unit& unit, std::ostream& out);
 
     void undo(Master& master, const std::string& stepName);
-    void force(Master& master, const std::string& stepName);
 
     unsigned int rebuildArtifact(Master& master, const std::string& artifactName);
 }
