@@ -7,6 +7,7 @@
 #pragma once
 
 #include "hash-cache.hh"
+#include "utils/flags.hh"
 
 #include <functional>
 #include <memory>
@@ -131,10 +132,20 @@ private:
 
 class Step : public Unit {
 public:
+    enum class Flag {
+        Sudo,
+    };
+
+    using Flags = utils::FlagsT<Flag>;
+
+    //
+
     Step(const std::string& name,
-         Script& parent);
+         Script& parent,
+         Flags flags);
 
     Script* parent() override;
+    bool flag(Flag f) const;
 
     bool isCompleted() const;
     void complete();
@@ -154,6 +165,7 @@ public:
 
 private:
     Script* m_parent = nullptr;
+    const Flags m_flags;
     bool m_completed = false;
 
     std::vector<std::string> m_artifacts;

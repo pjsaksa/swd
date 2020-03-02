@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include "flags.hh"
+
 #include <istream>
 #include <ostream>
 #include <string>
@@ -24,31 +26,7 @@ namespace utils
             RedirectErrToOut,
         };
 
-        class Flags {
-            using bits_t = uint32_t;
-
-            //
-
-            bits_t bits;
-
-        public:
-            Flags() : bits(0) {}
-            Flags(Flag f) : bits(1 << static_cast<int>( f )) {}
-
-            bool flag(Flag f) const
-            {
-                return bits & (1 << static_cast<int>( f ));
-            }
-
-        private:
-            explicit Flags(bits_t b)
-                : bits(b) {}
-
-            //
-
-            friend Exec::Flags operator| (Exec::Flags l, Exec::Flag r);
-            friend Exec::Flags operator| (Exec::Flag l,  Exec::Flag r);
-        };
+        using Flags = FlagsT<Flag>;
 
         // -----
 
@@ -75,16 +53,4 @@ namespace utils
         std::istream input_stream;
         std::ostream output_stream;
     };
-
-    // -----
-
-    inline Exec::Flags operator| (Exec::Flags l, Exec::Flag r)
-    {
-        return Exec::Flags( l.bits | (1 << static_cast<int>( r )) );
-    }
-
-    inline Exec::Flags operator| (Exec::Flag l, Exec::Flag r)
-    {
-        return Exec::Flags( (1 << static_cast<int>( l )) | (1 << static_cast<int>( r )) );
-    }
 }

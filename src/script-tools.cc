@@ -162,8 +162,37 @@ namespace
                         throw std::runtime_error("step with no name");
                     }
 
+                    // flags
+
+                    Step::Flags flags;
+
+                    if (j_step.count("flags")) {
+                        if (j_step["flags"].is_array() == false) {
+                            throw std::runtime_error("step with non-array flags-element");
+                        }
+
+                        for (auto& j_flag : j_step["flags"])
+                        {
+                            if (j_flag.is_string() == false) {
+                                throw std::runtime_error("step with non-string flag");
+                            }
+
+                            const std::string flagName = j_flag.get<std::string>();
+
+                            if (flagName == "sudo") {
+                                flags |= Step::Flag::Sudo;
+                            }
+                            else {
+                                throw std::runtime_error("step with unknown flag: '" + flagName + "'");
+                            }
+                        }
+                    }
+
+                    //
+
                     Step& newStep = *new Step(j_step["name"],
-                                              script);
+                                              script,
+                                              flags);
 
                     script.add(unique_step_t(&newStep));
 
@@ -799,7 +828,19 @@ namespace
                 throw std::runtime_error("INTERRUPTED");
             }
 
-            utils::Exec process(tools::conjureExec(step));
+            const std::string command = ({
+                    std::ostringstream oss;
+
+                    if (step.flag(Step::Flag::Sudo)) {
+                        oss << "sudo --non-interactive --preserve-env ";
+                    }
+
+                    oss << tools::conjureExec(step);
+
+                    oss.str();
+                });
+
+            utils::Exec process(command);
 
             std::cout << process.read().rdbuf();
 

@@ -244,15 +244,22 @@ Step* Script::findStep(const std::string& name)
 // ------------------------------------------------------------
 
 Step::Step(const std::string& name,
-           Script& parent)
+           Script& parent,
+           Flags flags)
     : Unit(name),
-      m_parent(&parent)
+      m_parent(&parent),
+      m_flags(flags)
 {
 }
 
 Script* Step::parent()
 {
     return m_parent;
+}
+
+bool Step::flag(Flag f) const
+{
+    return m_flags.flag(f);
 }
 
 bool Step::isCompleted() const
