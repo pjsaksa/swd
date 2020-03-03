@@ -196,3 +196,45 @@ private:
     friend void Script::undoStep(const std::string&);
     friend void Script::undoAllSteps();
 };
+
+// ------------------------------------------------------------
+
+namespace lambda_impl
+{
+    struct LambdaVisitorGroup : Unit::Visitor {
+        LambdaVisitorGroup(const std::function<void(Group&)>& func);
+
+        void operator() (Group& group) const override;
+
+    private:
+        std::function<void(Group&)> m_func;
+    };
+
+    //
+
+    struct LambdaVisitorScript : Unit::Visitor {
+        LambdaVisitorScript(const std::function<void(Script&)>& func);
+
+        void operator() (Script& script) const override;
+
+    private:
+        std::function<void(Script&)> m_func;
+    };
+
+    //
+
+    struct LambdaVisitorStep : Unit::Visitor {
+        LambdaVisitorStep(const std::function<void(Step&)>& func);
+
+        void operator() (Step& step) const override;
+
+    private:
+        std::function<void(Step&)> m_func;
+    };
+}
+
+// ------------------------------------------------------------
+
+lambda_impl::LambdaVisitorGroup  lambdaVisitor(const std::function<void(Group&)>& func);
+lambda_impl::LambdaVisitorScript lambdaVisitor(const std::function<void(Script&)>& func);
+lambda_impl::LambdaVisitorStep   lambdaVisitor(const std::function<void(Step&)>& func);

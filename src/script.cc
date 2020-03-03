@@ -336,3 +336,45 @@ void Step::recalculateHashes(Master& master)
         d->storeHash( d->calculateHash() );
     }
 }
+
+// ------------------------------------------------------------
+
+lambda_impl::LambdaVisitorGroup::LambdaVisitorGroup(const std::function<void(Group&)>& func)
+    : m_func(func)
+{
+}
+
+void lambda_impl::LambdaVisitorGroup::operator() (Group& group) const
+{
+    m_func(group);
+}
+
+// ------------------------------------------------------------
+
+lambda_impl::LambdaVisitorScript::LambdaVisitorScript(const std::function<void(Script&)>& func)
+    : m_func(func)
+{
+}
+
+void lambda_impl::LambdaVisitorScript::operator() (Script& script) const
+{
+    m_func(script);
+}
+
+// ------------------------------------------------------------
+
+lambda_impl::LambdaVisitorStep::LambdaVisitorStep(const std::function<void(Step&)>& func)
+    : m_func(func)
+{
+}
+
+void lambda_impl::LambdaVisitorStep::operator() (Step& step) const
+{
+    m_func(step);
+}
+
+// ------------------------------------------------------------
+
+lambda_impl::LambdaVisitorGroup  lambdaVisitor(const std::function<void(Group&)>& func)  { return lambda_impl::LambdaVisitorGroup(func); }
+lambda_impl::LambdaVisitorScript lambdaVisitor(const std::function<void(Script&)>& func) { return lambda_impl::LambdaVisitorScript(func); }
+lambda_impl::LambdaVisitorStep   lambdaVisitor(const std::function<void(Step&)>& func)   { return lambda_impl::LambdaVisitorStep(func); }
