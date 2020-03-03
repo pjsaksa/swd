@@ -22,7 +22,6 @@ class Master;
 class Script;
 class Step;
 class Unit;
-class UnitVisitor;
 
 // type aliases
 
@@ -34,15 +33,32 @@ using unique_unit_t   = std::unique_ptr<Unit>;
 
 class Unit {
 public:
-    virtual ~Unit();
+    struct Visitor {
+        virtual ~Visitor() = default;
+
+        virtual void operator() (Group& /*group*/) const {}
+        virtual void operator() (Script& /*script*/) const {}
+        virtual void operator() (Step& /*step*/) const {}
+    };
+
+    //
+
+    struct Traveler : Visitor {
+        Traveler(const Visitor& visitor);
+    protected:
+        const Visitor& m_visitor;
+    };
+
+    // -----
+
+    virtual ~Unit() = default;
 
     const std::string& name() const;
     virtual Unit* parent() = 0;
 
-    virtual void visit(const UnitVisitor& visitor) = 0;
-    virtual void forEach(const UnitVisitor& visitor) = 0;
-
-    void travelPath(const UnitVisitor& visitor);
+    virtual void apply(const Visitor& visitor) = 0;
+    virtual void applyChildren(const Visitor& visitor) = 0;
+    void applyParent(const Visitor& visitor);
 
 protected:
     Unit(const std::string& name);
@@ -59,26 +75,6 @@ private:
 
 class Group : public Unit {
 public:
-    Group(const std::string& name,
-          Group& parent);
-
-    Group* parent() override;
-
-    void add(unique_unit_t&& unit);
-
-    void visit(const UnitVisitor& visitor) override;
-    void visitChildren(const UnitVisitor& visitor);
-
-    void forEach(const UnitVisitor& visitor) override;
-    void forEachChild(const UnitVisitor& visitor);
-    Unit* findUnit(const std::string& name);
-
-    //
-
-    static unique_group_t newRoot(const std::string& name);
-
-    //
-
     struct OrderUniqUnitByName {
         bool operator() (const unique_unit_t& left,
                          const unique_unit_t& right) const;
@@ -87,9 +83,31 @@ public:
     static bool OrderUniqUnitByName_string(const unique_unit_t& left,
                                            const std::string& right);
 
+    //
+
+    using units_t = std::set<unique_unit_t, OrderUniqUnitByName>;
+
+    //
+
+    Group(const std::string& name,
+          Group& parent);
+
+    Group* parent() override;
+
+    void add(unique_unit_t&& unit);
+
+    void apply(const Visitor& visitor) override;
+    void applyChildren(const Visitor& visitor) override;
+
+    Unit* findUnit(const std::string& name);
+
+    //
+
+    static unique_group_t newRoot(const std::string& name);
+
 private:
     Group* m_parent = nullptr;
-    std::set<unique_unit_t, OrderUniqUnitByName> m_units;
+    units_t m_units;
 
     //
 
@@ -118,9 +136,9 @@ public:
 
     void add(unique_step_t&& step);
 
-    void visit(const UnitVisitor& visitor) override;
-    void visitChildren(const UnitVisitor& visitor);
-    void forEach(const UnitVisitor& visitor) override;
+    void apply(const Visitor& visitor) override;
+    void applyChildren(const Visitor& visitor) override;
+
     Step* findStep(const std::string& name);
 
 private:
@@ -155,8 +173,8 @@ public:
     void addArtifact(const std::string& artifact);
     void addDependency(unique_dependency_t&& dependency);
 
-    void visit(const UnitVisitor& visitor) override;
-    void forEach(const UnitVisitor& visitor) override;
+    void apply(const Visitor& visitor) override;
+    void applyChildren(const Visitor& visitor) override;
 
     void forEachDependency(const std::function<void(Dependency&)>& callback);
 
@@ -177,12 +195,4 @@ private:
     friend void Script::completeStep(const std::string&);
     friend void Script::undoStep(const std::string&);
     friend void Script::undoAllSteps();
-};
-
-// ------------------------------------------------------------
-
-struct UnitVisitor {
-    virtual void operator() (Group&) const  {}
-    virtual void operator() (Script&) const {}
-    virtual void operator() (Step&) const   {}
 };

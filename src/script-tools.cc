@@ -9,6 +9,7 @@
 #include "config.hh"
 #include "hash-cache_impl.hh"
 #include "master.hh"
+#include "script-travelers.hh"
 #include "script.hh"
 #include "utils/exec.hh"
 #include "utils/string.hh"
@@ -24,7 +25,7 @@ using json = nlohmann::json;
 
 //
 
-class conjure_path : public UnitVisitor {
+class conjure_path : public Unit::Visitor {
 public:
     conjure_path(bool porcelain)
         : m_porcelain(porcelain) {}
@@ -85,14 +86,14 @@ private:
 std::string tools::conjurePath(Unit& unit)
 {
     conjure_path cp(true);
-    unit.travelPath(cp);
+    unit.apply(travelers::Path(cp));
     return cp.path();
 }
 
 std::string tools::conjureExec(Unit& unit)
 {
     conjure_path cp(false);
-    unit.travelPath(cp);
+    unit.apply(travelers::Path(cp));
     return cp.path();
 }
 
@@ -107,7 +108,7 @@ namespace
 
     //
 
-    class load_basics : public UnitVisitor {
+    class load_basics : public Unit::Visitor {
     public:
         load_basics(Master& master)
             : m_master(master) {}
@@ -533,7 +534,7 @@ namespace
 
     // -----
 
-    class load_step_cache : public UnitVisitor {
+    class load_step_cache : public Unit::Visitor {
     public:
         load_step_cache(const json& j)
             : m_json(j) {}
@@ -596,7 +597,7 @@ namespace
 
 void tools::loadScriptConfig(Master& master, Unit& unit)
 {
-    unit.forEach(load_basics(master));
+    unit.apply(travelers::ForEach(load_basics(master)));
 
     //
 
@@ -615,7 +616,7 @@ void tools::loadScriptConfig(Master& master, Unit& unit)
 
     //
 
-    unit.forEach(load_step_cache(j));
+    unit.apply(travelers::ForEach(load_step_cache(j)));
 }
 
 // ------------------------------------------------------------
@@ -633,7 +634,7 @@ void to_json(json& j, const Dependency& dep)
 
 namespace
 {
-    class conjure_step_cache_json : public UnitVisitor {
+    class conjure_step_cache_json : public Unit::Visitor {
     public:
         void operator() (Step& step) const override
         {
@@ -676,7 +677,8 @@ namespace
 void tools::saveScriptCache(Unit& unit)
 {
     conjure_step_cache_json conjurer;
-    unit.forEach(conjurer);
+
+    unit.apply(travelers::ForEach(conjurer));
 
     //
 
@@ -702,7 +704,7 @@ void tools::saveScriptCache(Unit& unit)
 
 namespace
 {
-    class scoped_execute : public UnitVisitor {
+    class scoped_execute : public Unit::Visitor {
     public:
 
         // TODO(pjsaksa): separate operation modes ... derived classes maybe?
@@ -724,7 +726,7 @@ namespace
 
         restart_scope:
             try {
-                group.visitChildren( *this );
+                group.applyChildren( *this );
             }
             catch (const invalidate_scope& scopeEx)
             {
@@ -747,7 +749,7 @@ namespace
 
         restart_scope:
             try {
-                script.visitChildren( *this );
+                script.applyChildren( *this );
             }
             catch (const invalidate_scope& scopeEx)
             {
@@ -880,14 +882,14 @@ void tools::execute(Master& master,
         throw std::runtime_error("tools::execute(): too many main functions");
     }
 
-    master.root->visit( scoped_execute(master, stepCount, showNext, interactive) );
+    master.root->apply( scoped_execute(master, stepCount, showNext, interactive) );
 }
 
 // ------------------------------------------------------------
 
 namespace
 {
-    class list_steps : public UnitVisitor {
+    class list_steps : public Unit::Visitor {
     public:
         list_steps(std::ostream& out)
             : m_out(out) {}
@@ -906,127 +908,19 @@ namespace
 
 void tools::listSteps(Unit& unit, std::ostream& out)
 {
-    unit.forEach(list_steps(out));
+    unit.apply(travelers::ForEach(list_steps(out)));
 }
 
 // ------------------------------------------------------------
 
 namespace
 {
-    class find_unit : public UnitVisitor {
-    public:
-        find_unit(const std::string& path,
-                  const UnitVisitor& operation)
-            : m_path(path),
-              m_pathLeft(path),
-              m_operation(operation) {}
-
-        void operator() (Group& group) const override
-        {
-            if (m_pathLeft.empty())
-            {
-                callOperation(group);
-            }
-            else {
-                std::string::size_type dash  = m_pathLeft.find('/');
-                std::string::size_type space = m_pathLeft.find(' ');
-
-                std::string unitName;
-
-                if (dash != std::string::npos)
-                {
-                    if (space != std::string::npos
-                        && space < dash)
-                    {
-                        throw std::runtime_error("unknown unit: " + m_path);
-                    }
-                    else {
-                        unitName = m_pathLeft.substr(0, dash);
-                        m_pathLeft.erase(0, dash + 1);
-                    }
-                }
-                else if (space != std::string::npos)
-                {
-                    unitName = m_pathLeft.substr(0, space);
-                    m_pathLeft.erase(0, space + 1);
-                }
-                else {
-                    unitName = m_pathLeft;
-                    m_pathLeft.clear();
-                }
-
-                Unit* unit = group.findUnit( unitName );
-
-                if (!unit) {
-                    throw std::runtime_error("unknown unit: " + m_path);
-                }
-
-                //
-
-                unit->visit(*this);
-            }
-        }
-
-        void operator() (Script& script) const override
-        {
-            if (m_pathLeft.empty())
-            {
-                callOperation(script);
-            }
-            else if (m_pathLeft.find('/') != std::string::npos
-                     || m_pathLeft.find(' ') != std::string::npos)
-            {
-                throw std::runtime_error("unknown unit: " + m_path);
-            }
-            else {
-                Step* step = script.findStep(m_pathLeft);
-                m_pathLeft.clear();
-
-                if (!step) {
-                    throw std::runtime_error("unknown unit: " + m_path);
-                }
-
-                step->visit(*this);
-            }
-        }
-
-        void operator() (Step& step) const override
-        {
-            if (m_pathLeft.empty())
-            {
-                callOperation(step);
-            }
-            else {
-                throw std::runtime_error("unknown unit: " + m_path);
-            }
-        }
-
-    private:
-        const std::string& m_path;
-        mutable std::string m_pathLeft;
-        const UnitVisitor& m_operation;
-
-        //
-
-        void callOperation(Unit& unit) const
-        {
-            if (tools::conjurePath(unit) == m_path) {
-                unit.visit(m_operation);
-            }
-            else {
-                throw std::runtime_error("unknown unit: " + m_path);
-            }
-        }
-    };
-
-    // -----
-
-    class undo_step : public UnitVisitor {
+    class undo_step : public Unit::Visitor {
     public:
         void operator() (Group& group) const override
         {
             std::cout << "Undoing group " << tools::conjurePath(group) << std::endl;
-            group.forEach(*this);
+            group.apply(travelers::ForEach(*this));
         }
 
         void operator() (Script& script) const override
@@ -1045,15 +939,15 @@ namespace
 
 void tools::undo(Master& master, const std::string& stepName)
 {
-    master.root->visit(find_unit(stepName,
-                                 undo_step()));
+    master.root->apply(travelers::FindUnit(stepName,
+                                           undo_step()));
 }
 
 // ------------------------------------------------------------
 
 namespace
 {
-    class rebuild_artifact : public UnitVisitor {
+    class rebuild_artifact : public Unit::Visitor {
     public:
         rebuild_artifact(const std::string& artifact)
             : m_artifact(artifact) {}
@@ -1092,7 +986,7 @@ unsigned int tools::rebuildArtifact(Master& master, const std::string& artifactN
 {
     rebuild_artifact rebuilder(artifactName);
 
-    master.root->forEach(rebuilder);
+    master.root->apply(travelers::ForEach(rebuilder));
 
     return rebuilder.count();
 }

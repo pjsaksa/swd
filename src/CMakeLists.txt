@@ -11,6 +11,7 @@ add_executable(swd
     master.cc
     scan.cc
     script-tools.cc
+    script-travelers.cc
     script.cc
     #
     utils/ansi.cc

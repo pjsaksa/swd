@@ -11,7 +11,14 @@
 
 #include <algorithm>
 
-Unit::~Unit() = default;
+//
+
+Unit::Traveler::Traveler(const Visitor& visitor)
+    : m_visitor(visitor)
+{
+}
+
+// ------------------------------------------------------------
 
 const std::string& Unit::name() const
 {
@@ -23,15 +30,27 @@ Unit::Unit(const std::string& name)
 {
 }
 
-void Unit::travelPath(const UnitVisitor& visitor)
+void Unit::applyParent(const Visitor& visitor)
 {
     Unit* p = parent();
 
     if (p) {
-        p->travelPath(visitor);
+        p->apply(visitor);
     }
+}
 
-    visit(visitor);
+// ------------------------------------------------------------
+
+bool Group::OrderUniqUnitByName::operator() (const unique_unit_t& left,
+                                             const unique_unit_t& right) const
+{
+    return left->name() < right->name();
+}
+
+bool Group::OrderUniqUnitByName_string(const unique_unit_t& left,
+                                       const std::string& right)
+{
+    return left->name() < right;
 }
 
 // ------------------------------------------------------------
@@ -53,31 +72,16 @@ void Group::add(unique_unit_t&& unit)
     m_units.emplace(std::move(unit));
 }
 
-void Group::visit(const UnitVisitor& visitor)
+void Group::apply(const Visitor& visitor)
 {
     visitor(*this);
 }
 
-void Group::visitChildren(const UnitVisitor& visitor)
+void Group::applyChildren(const Visitor& visitor)
 {
     for (auto& u : m_units)
     {
-        u->visit(visitor);
-    }
-}
-
-void Group::forEach(const UnitVisitor& visitor)
-{
-    visit(visitor);
-
-    forEachChild(visitor);
-}
-
-void Group::forEachChild(const UnitVisitor& visitor)
-{
-    for (auto& u : m_units)
-    {
-        u->forEach(visitor);
+        u->apply(visitor);
     }
 }
 
@@ -104,20 +108,6 @@ unique_group_t Group::newRoot(const std::string& name)
 Group::Group(const std::string& name)
     : Unit(name)
 {
-}
-
-// ------------------------------------------------------------
-
-bool Group::OrderUniqUnitByName::operator() (const unique_unit_t& left,
-                                             const unique_unit_t& right) const
-{
-    return left->name() < right->name();
-}
-
-bool Group::OrderUniqUnitByName_string(const unique_unit_t& left,
-                                       const std::string& right)
-{
-    return left->name() < right;
 }
 
 // ------------------------------------------------------------
@@ -207,26 +197,16 @@ void Script::add(unique_step_t&& step)
     m_steps.emplace_back(std::move(step));
 }
 
-void Script::visit(const UnitVisitor& visitor)
+void Script::apply(const Visitor& visitor)
 {
     visitor(*this);
 }
 
-void Script::visitChildren(const UnitVisitor& visitor)
+void Script::applyChildren(const Visitor& visitor)
 {
     for (auto& step : m_steps)
     {
-        step->visit(visitor);
-    }
-}
-
-void Script::forEach(const UnitVisitor& visitor)
-{
-    visit(visitor);
-
-    for (auto& step : m_steps)
-    {
-        step->forEach(visitor);
+        step->apply(visitor);
     }
 }
 
@@ -294,14 +274,13 @@ void Step::addDependency(unique_dependency_t&& dependency)
     m_dependencies.push_back(std::move(dependency));
 }
 
-void Step::visit(const UnitVisitor& visitor)
+void Step::apply(const Visitor& visitor)
 {
     visitor(*this);
 }
 
-void Step::forEach(const UnitVisitor& visitor)
+void Step::applyChildren(const Visitor& /*visitor*/)
 {
-    visit(visitor);
 }
 
 void Step::forEachDependency(const std::function<void(Dependency&)>& callback)
