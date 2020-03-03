@@ -37,7 +37,6 @@ namespace travelers
     //
 
     struct FindUnit : Unit::Traveler {
-    public:
         FindUnit(const std::string& path,
                  const Visitor& visitor);
 

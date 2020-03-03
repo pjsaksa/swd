@@ -116,25 +116,34 @@ namespace
         void operator() (Group& group) const override
         {
             const std::string groupName = tools::conjurePath(group);
-            const bool rootGroup = groupName.empty();
-            const std::string groupInfoFile = (rootGroup
+            const bool isThisRootGroup = groupName.empty();
+            const std::string groupFileName = (isThisRootGroup
                                                ? Config::instance().root + "/group.swd"
                                                : Config::instance().root + '/' + groupName + "/group.swd");
 
-            if (access(groupInfoFile.c_str(), F_OK) != 0) {
-                return;
+            if (access(groupFileName.c_str(), F_OK) == 0)
+            {
+                if (access(groupFileName.c_str(), X_OK) != 0) {
+                    throw std::runtime_error(groupFileName + " found but it is not executable");
+                }
+
+                json j = execSwdInfo(groupFileName);
+
+                // artifacts
+
+                parseArtifacts(j, groupName);
+
+                //
+
+                group.applyChildren(*this);
+
+                // rules
+
+                parseRules(group, groupName, j);
             }
-
-            if (access(groupInfoFile.c_str(), X_OK) != 0) {
-                throw std::runtime_error(groupInfoFile + " found but it is not executable");
+            else {
+                group.applyChildren(*this);
             }
-
-            json j = execSwdInfo(groupInfoFile);
-
-            // artifacts
-
-            parseArtifacts(j,
-                           groupName);
         }
 
         void operator() (Script& script) const override
@@ -146,8 +155,7 @@ namespace
 
             // artifacts
 
-            parseArtifacts(j,
-                           scriptName);
+            parseArtifacts(j, scriptName);
 
             // steps
 
@@ -228,41 +236,46 @@ namespace
 
                     checkDependencySanity(j_step);
 
-                    if (j_step.count("dependencies") > 0)
+                    loadDependencies(m_master, j_step, newStep, scriptName);
+                }
+            }
+        }
+
+        static void loadDependencies(Master& master, const json& j, Step& step, const std::string& baseName)
+        {
+            if (j.count("dependencies") > 0)
+            {
+                for (auto& j_dep : j["dependencies"])
+                {
+                    const std::string type = j_dep["type"].get<std::string>();
+
+                    if (type == "artifact")
                     {
-                        for (auto& j_dep : j_step["dependencies"])
-                        {
-                            const std::string type = j_dep["type"].get<std::string>();
+                        std::string artifactName = j_dep["id"].get<std::string>();
 
-                            if (type == "artifact")
-                            {
-                                std::string artifactName = j_dep["id"].get<std::string>();
-
-                                if (artifactName.empty()) {
-                                    throw std::runtime_error("artifact id must not be empty");
-                                }
-
-                                if (artifactName[0] == '/') {
-                                    artifactName.erase(0, 1);
-                                }
-                                else {
-                                    artifactName = scriptName + '/' + artifactName;
-                                }
-
-                                newStep.addDependency(std::make_unique<DependencyArtifact>(m_master,
-                                                                                           artifactName));
-                            }
-                            else if (type == "data")
-                            {
-                                newStep.addDependency(std::make_unique<DependencyData>(j_dep["id"].get<std::string>(),
-                                                                                       j_dep["data"].get<std::string>()));
-                            }
-                            else if (type == "file")
-                            {
-                                newStep.addDependency(std::make_unique<DependencyFile>(j_dep["id"].get<std::string>(),
-                                                                                       j_dep["path"].get<std::string>()));
-                            }
+                        if (artifactName.empty()) {
+                            throw std::runtime_error("artifact id must not be empty");
                         }
+
+                        if (artifactName[0] == '/') {
+                            artifactName.erase(0, 1);
+                        }
+                        else {
+                            artifactName = baseName + '/' + artifactName;
+                        }
+
+                        step.addDependency(std::make_unique<DependencyArtifact>(master,
+                                                                                artifactName));
+                    }
+                    else if (type == "data")
+                    {
+                        step.addDependency(std::make_unique<DependencyData>(j_dep["id"].get<std::string>(),
+                                                                            j_dep["data"].get<std::string>()));
+                    }
+                    else if (type == "file")
+                    {
+                        step.addDependency(std::make_unique<DependencyFile>(j_dep["id"].get<std::string>(),
+                                                                            j_dep["path"].get<std::string>()));
                     }
                 }
             }
@@ -336,6 +349,43 @@ namespace
                         && value["managed"].get<bool>() == true)
                     {
                         artifact->setManaged();
+                    }
+                }
+            }
+        }
+
+        void parseRules(Group& group, const std::string& groupName, json& j) const
+        {
+            // "rules"
+
+            if (j.count("rules"))
+            {
+                if (j["rules"].is_object() == false) {
+                    throw std::runtime_error("non-object rules-element");
+                }
+
+                for (auto& j_rule : j["rules"].items())
+                {
+                    const std::string& stepName = j_rule.key();
+                    const json& j_stepRules = j_rule.value();
+
+                    if (j_stepRules.is_object() == false) {
+                        throw std::runtime_error("non-object step-element inside rules");
+                    }
+
+                    // "dependencies"
+
+                    if (j_stepRules.count("dependencies"))
+                    {
+                        checkDependencySanity(j_stepRules);
+
+                        group.apply(travelers::ForEach(lambdaVisitor([&master = m_master, &stepName, &groupName, &j_stepRules]
+                                                                     (Step& step)
+                                                                     {
+                                                                         if (step.name() == stepName) {
+                                                                             loadDependencies(master, j_stepRules, step, groupName);
+                                                                         }
+                                                                     })));
                     }
                 }
             }
@@ -597,7 +647,7 @@ namespace
 
 void tools::loadScriptConfig(Master& master, Unit& unit)
 {
-    unit.apply(travelers::ForEach(load_basics(master)));
+    unit.apply(load_basics(master));
 
     //
 
