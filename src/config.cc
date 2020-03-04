@@ -126,6 +126,15 @@ Config::Config(volatile bool& i)
 
     while (getline(ifs, line))
     {
+        {
+            const std::string::size_type hash = line.find('#');
+            if (hash != std::string::npos) {
+                line.erase(hash);
+            }
+        }
+
+        //
+
         istringstream iss(line);
         string token;
 
