@@ -61,7 +61,7 @@ std::string ArtifactDir::calculateHash() const
             std::ostringstream cmdOss;
             utils::escape_bash cmdEsc(cmdOss);
 
-            cmdOss << "find " << flush;
+            cmdOss << "find -L " << flush;
             cmdEsc << m_path << flush;
 
             if (!m_exclude.empty())
