@@ -11,6 +11,7 @@
 #include "master.hh"
 #include "script-travelers.hh"
 #include "script.hh"
+#include "utils/ansi.hh"
 #include "utils/exec.hh"
 #include "utils/string.hh"
 
@@ -243,7 +244,7 @@ namespace
 
         static void loadDependencies(Master& master, const json& j, Step& step, const std::string& baseName)
         {
-            if (j.count("dependencies") > 0)
+            if (j.count("dependencies"))
             {
                 for (auto& j_dep : j["dependencies"])
                 {
@@ -831,7 +832,11 @@ namespace
                 }
 
                 if (m_interactive) {
-                    std::cout << "exec '" << tools::conjurePath(step) << "' ? [Y]: " << std::flush;
+                    std::cout << utils::ansi::Bold
+                              << utils::ansi::Green << "exec '"
+                              << utils::ansi::White << tools::conjurePath(step)
+                              << utils::ansi::Green << "' ? [Y]: "
+                              << utils::ansi::Normal << std::flush;
 
                     std::string token;
 
