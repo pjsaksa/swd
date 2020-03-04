@@ -25,10 +25,11 @@ void HashCache::storeHash(const std::string& hashSum)
     m_storedHashSum = hashSum;
 }
 
-bool HashCache::compareHash(const std::string& hashSum) const
+bool HashCache::compareHash(const std::string& hashSum, bool notExistOk) const
 {
     if (m_storedHashSum.empty()
-        || m_storedHashSum == TargetDoesNotExist)
+        && (!notExistOk
+            && m_storedHashSum == TargetDoesNotExist))
     {
         return false;
     }
@@ -151,7 +152,7 @@ bool Artifact::checkInvalidation(Master& master,
     // rebuild all linked steps if artifact is not 'up to date'
 
     if (rebuildNeeded
-        && !compareHash(calculateHash()))
+        && !compareHash(calculateHash(), true))
     {
         auto count = tools::rebuildArtifact(master, name());
 

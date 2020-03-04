@@ -44,7 +44,7 @@ public:
     virtual std::string calculateHash() const = 0;
 
     void storeHash(const std::string& hashSum);
-    bool compareHash(const std::string& hashSum) const;
+    bool compareHash(const std::string& hashSum, bool notExistOk = false) const;
 
     std::string getHashSum() const;
 

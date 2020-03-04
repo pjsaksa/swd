@@ -7,6 +7,7 @@
 #include "hash-tools.hh"
 
 #include "config.hh"
+#include "hash-cache.hh"
 #include "master.hh"
 #include "utils/ansi.hh"
 #include "utils/exec.hh"
@@ -52,16 +53,28 @@ namespace
 
 std::string tools::hash(const std::string& input)
 {
-    return calculate_hash([&input] (std::ostream& out)
-                          {
-                              out << input;
-                          });
+    if (input.empty()) {
+        return HashCache::TargetDoesNotExist;
+    }
+    else {
+        return calculate_hash([&input] (std::ostream& out)
+                              {
+                                  out << input;
+                              });
+    }
 }
 
 std::string tools::hash(std::istream& input)
 {
-    return calculate_hash([&input] (std::ostream& out)
+    char firstByte;
+
+    if (!input.get(firstByte)) {
+        return HashCache::TargetDoesNotExist;
+    }
+
+    return calculate_hash([&input, firstByte] (std::ostream& out)
                           {
+                              out.put(firstByte);
                               out << input.rdbuf();
                           });
 }
@@ -94,7 +107,7 @@ void tools::listArtifacts(const Master& master,
 
         const std::string hashSum = artifactPair.second->calculateHash();
 
-        if (hashSum == Artifact::TargetDoesNotExist)
+        if (hashSum == HashCache::TargetDoesNotExist)
         {
             out << col::Bold << col::Black
                 << "Does not exist"
