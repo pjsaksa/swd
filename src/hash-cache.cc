@@ -145,7 +145,7 @@ bool Artifact::checkInvalidation(Master& master,
         else if (!found &&
                  !rebuildNeeded)
         {
-            throw std::runtime_error("Step is not touched in managed artifact, but step rebuild is not needed ... rebuild SHOULD be needed; step=" + stepName);
+            return false;       // this should not happen, but it did
         }
     }
 
