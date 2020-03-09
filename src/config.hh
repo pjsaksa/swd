@@ -24,6 +24,9 @@ struct Config {
 
     static const Config& instance();
 
+    static void setenv(const std::string& name,
+                       const std::string& value);
+
 private:
     Config(volatile bool& i);
     ~Config();

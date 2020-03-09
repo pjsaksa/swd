@@ -11,7 +11,7 @@
 #include <fstream>
 #include <sstream>
 
-#include "unistd.h"
+#include <unistd.h>
 
 using namespace std;
 
@@ -80,6 +80,20 @@ const Config& Config::instance()
 {
     static Config s_config(s_interrupted);
     return s_config;
+}
+
+void Config::setenv(const std::string& name,
+                    const std::string& value)
+{
+    using namespace std::string_literals;
+    //
+
+    if (::setenv(name.c_str(),
+                 value.c_str(),
+                 1) != 0)
+    {
+        throw std::runtime_error("setenv: "s + strerror(errno));
+    }
 }
 
 Config::Config(volatile bool& i)
@@ -156,7 +170,7 @@ Config::Config(volatile bool& i)
                     envPath += ':' + basePath + '/' + add;
                 }
 
-                setenv("PATH", envPath.c_str(), 1);
+                setenv("PATH", envPath);
             }
             else {
                 throw runtime_error("configuration error: invalid 'add_path'");
@@ -182,7 +196,7 @@ Config::Config(volatile bool& i)
             if (iss >> var >> ws
                 && getline(iss, value))
             {
-                setenv(var.c_str(), value.c_str(), 1);
+                setenv(var, value);
             }
             else {
                 throw runtime_error("configuration error: invalid 'env'");
@@ -203,7 +217,7 @@ Config::Config(volatile bool& i)
         else if (token == "root")
         {
             if (iss >> root) {
-                setenv("SWD_ROOT", root.c_str(), 1);
+                setenv("SWD_ROOT", root);
             }
             else {
                 throw runtime_error("configuration error: invalid 'root'");

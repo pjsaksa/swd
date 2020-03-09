@@ -4,6 +4,7 @@
  * Licensed under The MIT License, see file LICENSE.txt in this source tree.
  */
 
+#include "config.hh"
 #include "hash-tools.hh"
 #include "master.hh"
 #include "script-tools.hh"
@@ -165,6 +166,8 @@ namespace
         public:
             void execute(Master& master) override
             {
+                Config::setenv("SWD_INTERACTIVE", "yes");
+
                 tools::execute(master,
                                -1,
                                false,
