@@ -187,9 +187,12 @@ namespace
                                 throw std::runtime_error("step with non-string flag");
                             }
 
-                            const std::string flagName = j_flag.get<std::string>();
+                            const std::string flagName = utils::tolower( j_flag.get<std::string>() );
 
-                            if (flagName == "sudo") {
+                            if (flagName == "always") {
+                                flags |= Step::Flag::Always;
+                            }
+                            else if (flagName == "sudo") {
                                 flags |= Step::Flag::Sudo;
                             }
                             else {
@@ -854,9 +857,8 @@ namespace
                         std::istringstream issLine(line);
 
                         issLine >> token;   // ignore errors
+                        utils::tolower(token);
                     }
-
-                    utils::tolower(token);
 
                     if (!(token.empty()
                           || token == "y"

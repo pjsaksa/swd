@@ -292,7 +292,8 @@ void Step::forEachDependency(const std::function<void(Dependency&)>& callback)
 
 bool Step::everythingUpToDate(Master& master)
 {
-    bool upToDateSoFar = isCompleted();
+    bool upToDateSoFar = ( !flag(Flag::Always)
+                           && isCompleted() );
 
     if (upToDateSoFar) {
         for (auto& d : m_dependencies) {

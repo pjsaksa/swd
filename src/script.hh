@@ -151,6 +151,7 @@ private:
 class Step : public Unit {
 public:
     enum class Flag {
+        Always,
         Sudo,
     };
 

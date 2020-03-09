@@ -10,5 +10,6 @@
 
 namespace utils
 {
+    std::string tolower(const std::string& s);
     void tolower(std::string& s);
 }
