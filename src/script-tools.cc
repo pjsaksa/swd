@@ -608,7 +608,11 @@ namespace
                 && j_step["completed"].is_boolean()
                 && j_step["completed"])
             {
-                step.complete();
+                try {
+                    step.complete();
+                } catch (std::runtime_error& ex) {
+                    std::cout << "Failing to complete step '" << stepName << "' because: " << ex.what() << std::endl;
+                }
             }
 
             // dependencies
