@@ -9,6 +9,7 @@
 #include "config.hh"
 #include "hash-cache_impl.hh"
 #include "master.hh"
+#include "script-syntax.hh"
 #include "script-travelers.hh"
 #include "script.hh"
 #include "utils/ansi.hh"
@@ -128,19 +129,30 @@ namespace
                     throw std::runtime_error(groupFileName + " found but it is not executable");
                 }
 
-                json j = execSwdInfo(groupFileName);
+                try {
+                    const json j = execSwdInfo(groupFileName);
 
-                // artifacts
+                    syntax::checkGroupFile(j);
 
-                parseArtifacts(j, groupName);
+                    // artifacts
 
-                //
+                    parseArtifacts(j, groupName);
 
-                group.applyChildren(*this);
+                    //
 
-                // rules
+                    group.applyChildren(*this);
 
-                parseRules(group, groupName, j);
+                    // rules
+
+                    parseRules(group, groupName, j);
+                }
+                catch (std::exception& e) {
+                    throw std::runtime_error(({
+                                std::ostringstream oss;
+                                oss << (isThisRootGroup ? "(root)" : groupName) << " : " << e.what();
+                                oss.str();
+                            }));
+                }
             }
             else {
                 group.applyChildren(*this);
@@ -152,135 +164,108 @@ namespace
             const std::string scriptName = tools::conjurePath(script);
             const std::string scriptExec = Config::instance().root + '/' + scriptName + Script::FileExt;
 
-            json j = execSwdInfo(scriptExec);
+            try {
+                json j = execSwdInfo(scriptExec);
 
-            // artifacts
+                syntax::checkScriptFile(j);
 
-            parseArtifacts(j, scriptName);
+                // artifacts
 
-            // steps
+                parseArtifacts(j, scriptName);
 
-            if (j.count("steps"))
-            {
-                if (j["steps"].is_array() == false) {
-                    throw std::runtime_error("steps should be defined inside an array");
-                }
+                // steps
 
-                for (auto& j_step : j["steps"])
-                {
-                    if (j_step.count("name") == 0) {
-                        throw std::runtime_error("step with no name");
-                    }
-
-                    // flags
-
-                    Step::Flags flags;
-
-                    if (j_step.count("flags")) {
-                        if (j_step["flags"].is_array() == false) {
-                            throw std::runtime_error("step with non-array flags-element");
-                        }
-
-                        for (auto& j_flag : j_step["flags"])
-                        {
-                            if (j_flag.is_string() == false) {
-                                throw std::runtime_error("step with non-string flag");
-                            }
-
-                            const std::string flagName = utils::tolower( j_flag.get<std::string>() );
-
-                            if (flagName == "always") {
-                                flags |= Step::Flag::Always;
-                            }
-                            else if (flagName == "sudo") {
-                                flags |= Step::Flag::Sudo;
-                            }
-                            else {
-                                throw std::runtime_error("step with unknown flag: '" + flagName + "'");
-                            }
-                        }
-                    }
-
-                    //
-
-                    Step& newStep = *new Step(j_step["name"],
-                                              script,
-                                              flags);
-
-                    script.add(unique_step_t(&newStep));
-
-                    //
-
-                    // artifact links
-
-                    checkArtifactLinkSanity(j_step);
-
-                    if (j_step.count("artifacts"))
+                if (j.count("steps")) {
+                    for (auto& j_step : j["steps"])
                     {
-                        for (auto& j_artifact : j_step["artifacts"])
-                        {
-                            std::string artifactName = j_artifact.get<std::string>();
+                        // flags
 
-                            if (artifactName.empty()) {
-                                throw std::runtime_error("artifact id must not be empty");
-                            }
+                        Step::Flags flags;
 
-                            if (artifactName[0] == '/') {
-                                artifactName.erase(0, 1);
-                            }
-                            else {
-                                artifactName = scriptName + '/' + artifactName;
-                            }
+                        if (j_step.count("flags")) {
+                            for (auto& j_flag : j_step["flags"])
+                            {
+                                const std::string flagName = utils::tolower( j_flag.get<std::string>() );
 
-                            newStep.addArtifact(artifactName);
+                                if (flagName == "always")    flags |= Step::Flag::Always;
+                                else if (flagName == "sudo") flags |= Step::Flag::Sudo;
+                            }
                         }
+
+                        //
+
+                        Step& newStep = *new Step(j_step["name"],
+                                                  script,
+                                                  flags);
+
+                        script.add(unique_step_t(&newStep));
+
+                        //
+
+                        // artifact links
+
+                        if (j_step.count("artifacts") > 0)
+                        {
+                            for (auto& j_artifact : j_step["artifacts"])
+                            {
+                                std::string artifactName = j_artifact.get<std::string>();
+
+                                if (artifactName[0] == '/') {
+                                    artifactName.erase(0, 1);
+                                }
+                                else {
+                                    artifactName = scriptName + '/' + artifactName;
+                                }
+
+                                newStep.addArtifact(artifactName);
+                            }
+                        }
+
+                        // dependencies
+
+                        loadDependencies(m_master, j_step, newStep, scriptName);
                     }
-
-                    // dependencies
-
-                    checkDependencySanity(j_step);
-
-                    loadDependencies(m_master, j_step, newStep, scriptName);
                 }
+            }
+            catch (std::exception& e) {
+                throw std::runtime_error(({
+                            std::ostringstream oss;
+                            oss << scriptName << " : " << e.what();
+                            oss.str();
+                        }));
             }
         }
 
         static void loadDependencies(Master& master, const json& j, Step& step, const std::string& baseName)
         {
-            if (j.count("dependencies"))
+            if (j.count("dependencies") <= 0) {
+                return;
+            }
+
+            for (auto& j_dep : j["dependencies"])
             {
-                for (auto& j_dep : j["dependencies"])
-                {
-                    const std::string type = j_dep["type"].get<std::string>();
+                const std::string type = j_dep["type"].get<std::string>();
 
-                    if (type == "artifact")
-                    {
-                        std::string artifactName = j_dep["id"].get<std::string>();
+                if (type == "artifact") {
+                    std::string artifactName = j_dep["id"].get<std::string>();
 
-                        if (artifactName.empty()) {
-                            throw std::runtime_error("artifact id must not be empty");
-                        }
-
-                        if (artifactName[0] == '/') {
-                            artifactName.erase(0, 1);
-                        }
-                        else {
-                            artifactName = baseName + '/' + artifactName;
-                        }
-
-                        step.addDependency(std::make_unique<DependencyArtifact>(master,
-                                                                                artifactName));
+                    if (artifactName[0] == '/') {
+                        artifactName.erase(0, 1);
                     }
-                    else if (type == "data")
-                    {
-                        step.addDependency(std::make_unique<DependencyData>(j_dep["id"].get<std::string>(),
-                                                                            j_dep["data"].get<std::string>()));
+                    else {
+                        artifactName = baseName + '/' + artifactName;
                     }
-                    else if (type == "file")
-                    {
-                        step.addDependency(std::make_unique<DependencyFile>(j_dep["id"].get<std::string>(),
-                                                                            j_dep["path"].get<std::string>()));
-                    }
+
+                    step.addDependency(std::make_unique<DependencyArtifact>(master,
+                                                                            artifactName));
+                }
+                else if (type == "data") {
+                    step.addDependency(std::make_unique<DependencyData>(j_dep["id"].get<std::string>(),
+                                                                        j_dep["data"].get<std::string>()));
+                }
+                else if (type == "file") {
+                    step.addDependency(std::make_unique<DependencyFile>(j_dep["id"].get<std::string>(),
+                                                                        j_dep["path"].get<std::string>()));
                 }
             }
         }
@@ -290,280 +275,85 @@ namespace
 
         //
 
-        void parseArtifacts(json& j,
+        void parseArtifacts(const json& j,
                             const std::string& unitName) const
         {
-            if (j.count("artifacts") > 0)
-            {
-                if (j["artifacts"].is_object() == false) {
-                    throw std::runtime_error("artifacts should be defined inside an object");
-                }
+            if (j.count("artifacts") <= 0)
+                return;
 
-                for (auto& j_art : j["artifacts"].items())
+            for (auto& j_art : j["artifacts"].items())
+            {
+                const std::string& key = j_art.key();
+                const json& value = j_art.value();
+
+                //
+
+                const std::string artifactName = ( !unitName.empty()
+                                                   ? unitName + '/' + key
+                                                   : key );
+
+                const std::string type = value["type"].get<std::string>();
+                const std::string path = value["path"].get<std::string>();
+
+                Artifact* artifact = nullptr;
+
+                if (type == "file")
                 {
-                    const std::string& key = j_art.key();
-                    const json& value = j_art.value();
-
-                    //
-
-                    const std::string artifactName = ( !unitName.empty()
-                                                       ? unitName + '/' + key
-                                                       : key );
-
-                    checkArtifactSanity(artifactName,
-                                        key,
-                                        value);
-
-                    //
-
-                    const std::string type = value["type"].get<std::string>();
-                    const std::string path = value["path"].get<std::string>();
-
-                    Artifact* artifact = nullptr;
-
-                    if (type == "file")
-                    {
-                        artifact = new ArtifactFile(artifactName,
-                                                    unitName,
-                                                    path);
-                    }
-                    else if (type == "directory")
-                    {
-                        std::vector<std::string> excludeDirs;
-
-                        if (value.count("exclude") > 0)
-                        {
-                            for (const auto& ex : value["exclude"]) {
-                                excludeDirs.push_back(ex.get<std::string>());
-                            }
-                        }
-
-                        artifact = new ArtifactDir(artifactName,
-                                                   unitName,
-                                                   path,
-                                                   std::move( excludeDirs ));
-                    }
-
-                    m_master.artifacts.emplace(artifactName,
-                                               unique_artifact_t(artifact));
-
-                    //
-
-                    if (value.count("managed") > 0
-                        && value["managed"].get<bool>() == true)
-                    {
-                        artifact->setManaged();
-                    }
+                    artifact = new ArtifactFile(artifactName,
+                                                unitName,
+                                                path);
                 }
-            }
-        }
-
-        void parseRules(Group& group, const std::string& groupName, json& j) const
-        {
-            // "rules"
-
-            if (j.count("rules"))
-            {
-                if (j["rules"].is_object() == false) {
-                    throw std::runtime_error("non-object rules-element");
-                }
-
-                for (auto& j_rule : j["rules"].items())
+                else if (type == "directory")
                 {
-                    const std::string& stepName = j_rule.key();
-                    const json& j_stepRules = j_rule.value();
+                    std::vector<std::string> excludeDirs;
 
-                    if (j_stepRules.is_object() == false) {
-                        throw std::runtime_error("non-object step-element inside rules");
-                    }
-
-                    // "dependencies"
-
-                    if (j_stepRules.count("dependencies"))
-                    {
-                        checkDependencySanity(j_stepRules);
-
-                        group.apply(travelers::ForEach(lambdaVisitor([&master = m_master, &stepName, &groupName, &j_stepRules]
-                                                                     (Step& step)
-                                                                     {
-                                                                         if (step.name() == stepName) {
-                                                                             loadDependencies(master, j_stepRules, step, groupName);
-                                                                         }
-                                                                     })));
-                    }
-                }
-            }
-        }
-
-        void checkArtifactSanity(const std::string& name,
-                                 const std::string& key,
-                                 const json& value) const
-        {
-            if (key.empty()) {
-                throw std::runtime_error("artifact name is empty");
-            }
-
-            if (m_master.artifacts.count(name)) {
-                throw std::runtime_error("artifact " + name + " defined more than once");
-            }
-
-            // string "type"
-
-            if (value.count("type") == 0) {
-                throw std::runtime_error("artifact with no type");
-            }
-
-            if (value["type"].is_string() == false) {
-                throw std::runtime_error("artifact with non-string type");
-            }
-
-            const std::string type = value["type"].get<std::string>();
-
-            if (type != "file"
-                && type != "directory")
-            {
-                throw std::runtime_error("artifact '" + name + "' with unknown type '" + type + "'");
-            }
-
-            // string "path"
-
-            if (value.count("path") == 0) {
-                throw std::runtime_error(type + "-artifact with no path");
-            }
-
-            if (value["path"].is_string() == false) {
-                throw std::runtime_error(type + "-artifact with non-string path");
-            }
-
-            // array "exclude" (optional)
-
-            if (type == "directory")
-            {
-                if (value.count("exclude") > 0) {
-                    if (value["exclude"].is_array() == false) {
-                        throw std::runtime_error(type + "-artifact with non-array exclude-element");
-                    }
-
-                    for (const auto& ex : value["exclude"]) {
-                        if (ex.is_string() == false)
-                        {
-                            throw std::runtime_error(type + "-artifact with non-string value inside exclude");
+                    if (value.count("exclude") > 0) {
+                        for (const auto& ex : value["exclude"]) {
+                            excludeDirs.push_back(ex.get<std::string>());
                         }
                     }
+
+                    artifact = new ArtifactDir(artifactName,
+                                               unitName,
+                                               path,
+                                               std::move( excludeDirs ));
                 }
-            }
 
-            // boolean "managed" (optional)
+                m_master.artifacts.emplace(artifactName,
+                                           unique_artifact_t(artifact));
 
-            if (value.count("managed") > 0) {
-                if (value["managed"].is_boolean() == false) {
-                    throw std::runtime_error(type + "-artifact with non-boolean managed-element");
+                //
+
+                if (value.count("managed") > 0
+                    && value["managed"].get<bool>() == true)
+                {
+                    artifact->setManaged();
                 }
             }
         }
 
-        static void checkArtifactLinkSanity(const json& j)
+        void parseRules(Group& group, const std::string& groupName, const json& j) const
         {
-            if (j.count("artifacts") == 0) {
+            if (j.count("rules") <= 0) {
                 return;
             }
 
-            if (j["artifacts"].is_array() == false) {
-                throw std::runtime_error("artifact-links should be defined inside an array");
-            }
-
-            for (auto& j_artifact : j["artifacts"])
+            for (auto& j_rule : j["rules"].items())
             {
-                if (j_artifact.is_string() == false) {
-                    throw std::runtime_error("artifact-link should be a string");
-                }
-            }
-        }
+                const std::string& stepName = j_rule.key();
+                const json& j_stepRules = j_rule.value();
 
-        static void checkDependencySanity(const json& j)
-        {
-            if (j.count("dependencies") == 0) {
-                return;
-            }
+                // "dependencies"
 
-            if (j["dependencies"].is_array() == false) {
-                throw std::runtime_error("dependencies should be defined inside an array");
-            }
-
-            for (auto& j_dep : j["dependencies"])
-            {
-                if (j_dep.is_object() == false) {
-                    throw std::runtime_error("dependency-element should be an object");
-                }
-
-                // string "type"
-
-                if (j_dep.count("type") == 0) {
-                    throw std::runtime_error("dependency should have a type-element");
-                }
-
-                if (j_dep["type"].is_string() == false) {
-                    throw std::runtime_error("dependency with non-string type-element");
-                }
-
-                const std::string type = j_dep["type"].get<std::string>();
-
-                if (type == "artifact")
+                if (j_stepRules.count("dependencies"))
                 {
-                    if (j_dep.count("id") == 0) {
-                        throw std::runtime_error("artifact-dependency should have an id-element");
-                    }
-
-                    if (j_dep["id"].is_string() == false) {
-                        throw std::runtime_error("artifact-dependency with non-string id-element");
-                    }
-                }
-                else if (type == "data")
-                {
-                    // string "id"
-
-                    if (j_dep.count("id") == 0) {
-                        throw std::runtime_error("data-dependency with no id-element");
-                    }
-
-                    if (j_dep["id"].is_string() == false) {
-                        throw std::runtime_error("data-dependency with non-string id-element");
-                    }
-
-                    // string "data"
-
-                    if (j_dep.count("data") == 0) {
-                        throw std::runtime_error("data-dependency with no data-element");
-                    }
-
-                    if (j_dep["data"].is_string() == false) {
-                        throw std::runtime_error("data-dependency with non-string data-element");
-                    }
-                }
-                else if (type == "file")
-                {
-                    // string "id"
-
-                    if (j_dep.count("id") == 0) {
-                        throw std::runtime_error("file-dependency with no id-element");
-                    }
-
-                    if (j_dep["id"].is_string() == false) {
-                        throw std::runtime_error("file-dependency with non-string id-element");
-                    }
-
-                    // string "path"
-
-                    if (j_dep.count("path") == 0) {
-                        throw std::runtime_error("file-dependency with no path-element");
-                    }
-
-                    if (j_dep["path"].is_string() == false) {
-                        throw std::runtime_error("file-dependency with non-string path-element");
-                    }
-                }
-                else {
-                    throw std::runtime_error("dependency with unknown type '" + type + "'");
+                    group.apply(travelers::ForEach(lambdaVisitor([&master = m_master, &stepName, &groupName, &j_stepRules]
+                                                                 (Step& step)
+                                                                 {
+                                                                     if (step.name() == stepName) {
+                                                                         loadDependencies(master, j_stepRules, step, groupName);
+                                                                     }
+                                                                 })));
                 }
             }
         }

@@ -10,6 +10,7 @@ add_executable(swd
     hash-tools.cc
     master.cc
     scan.cc
+    script-syntax.cc
     script-tools.cc
     script-travelers.cc
     script.cc
