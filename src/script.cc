@@ -257,16 +257,23 @@ void Step::undo()
     m_parent->undoStep(name());
 }
 
-bool Step::hasArtifact(const std::string& artifact)
+bool Step::hasArtifactLink(const std::string& artifactName)
 {
-    return std::find(m_artifacts.begin(),
-                     m_artifacts.end(),
-                     artifact) != m_artifacts.end();
+    auto iter = std::find_if(m_artifacts.begin(),
+                             m_artifacts.end(),
+                             [&artifactName] (const ArtifactLink& artLink)
+                             {
+                                 return artifactName == artLink.name;
+                             });
+
+    return iter != m_artifacts.end();
 }
 
-void Step::addArtifact(const std::string& artifact)
+void Step::addArtifactLink(const std::string& artifactName,
+                           ArtifactLink::Type linkType)
 {
-    m_artifacts.push_back(artifact);
+    m_artifacts.push_back(ArtifactLink{ artifactName,
+                                        linkType });
 }
 
 void Step::addDependency(unique_dependency_t&& dependency)
@@ -304,17 +311,17 @@ bool Step::everythingUpToDate(Master& master)
         }
     }
 
-    const std::string stepName = tools::conjurePath(*this);
-
-    for (const std::string& artName : m_artifacts)
+    if (!upToDateSoFar)
     {
-        auto& artifact = master.artifact(artName);
+        const std::string stepName = tools::conjurePath(*this);
 
-        if (!artifact.checkInvalidation(master,
-                                        stepName,
-                                        !upToDateSoFar))        // !upToDateSoFar == rebuildNeeded
+        for (const auto& pair : m_artifacts)
         {
-            upToDateSoFar = false;
+            auto& artifact = master.artifact(pair.name);
+
+            artifact.checkInvalidation(master,
+                                       stepName,
+                                       pair.type);
         }
     }
 
@@ -325,11 +332,12 @@ void Step::recalculateHashes(Master& master)
 {
     const std::string stepName = tools::conjurePath(*this);
 
-    for (const std::string& artName : m_artifacts)
+    for (const auto& pair : m_artifacts)
     {
-        auto& artifact = master.artifact(artName);
+        auto& artifact = master.artifact(pair.name);
 
-        artifact.recalculate(stepName);
+        artifact.completeStep(stepName,
+                              pair.type);
     }
 
     for (auto& d : m_dependencies)

@@ -186,7 +186,7 @@ namespace
             {
                 auto& artifact = master.artifact(m_artifactName);
 
-                artifact.recalculate({});
+                artifact.recalculate();
             }
 
         private:

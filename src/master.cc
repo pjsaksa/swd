@@ -82,21 +82,22 @@ void Master::loadArtifactCache()
 
                 artIter->second->storeHash(j_value["hash"].get<std::string>());
 
-                // "managed"
+                // "marks"
 
-                if (j_value.count("managed") == 1)
+                if (j_value.count("marks") == 1)
                 {
-                    if (!j_value["managed"].is_array()) {
-                        throw std::runtime_error("malformed artifact save data: artifact managed-list must be an array");
+                    if (!j_value["marks"].is_object()) {
+                        throw std::runtime_error("malformed artifact save data: artifact marks must be an object");
                     }
 
-                    for (auto& j_managed : j_value["managed"])
+                    for (auto& j_mark : j_value["marks"].items())
                     {
-                        if (!j_managed.is_string()) {
-                            throw std::runtime_error("malformed artifact save data: artifact managed-list contains non-string");
+                        if (j_mark.value().is_string() == false) {
+                            throw std::runtime_error("malformed artifact save data: artifact marks contain non-string link type");
                         }
 
-                        artIter->second->setTouched( j_managed.get<std::string>() );
+                        artIter->second->restoreMark( j_mark.key(),
+                                                      Artifact::Link::parse(j_mark.value().get<std::string>()) );
                     }
                 }
             }
@@ -134,18 +135,18 @@ void Master::saveArtifactCache() const
 
         j_art["hash"] = artPair.second->getHashSum();
 
-        // "managed"
+        // "marks"
 
         bool first = true;
 
-        for (const auto& stepName : artPair.second->getManagedList())
+        for (const auto& mark : artPair.second->getMarks())
         {
             if (first) {
-                j_art["managed"] = json::array();
+                j_art["marks"] = json::object();
                 first = false;
             }
 
-            j_art["managed"].push_back(stepName);
+            j_art["marks"][mark.name] = Artifact::Link::typeToString( mark.type );
         }
     }
 

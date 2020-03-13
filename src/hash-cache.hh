@@ -58,19 +58,46 @@ class Artifact : public HashCache {
     struct Manager;
 
 public:
+    struct Link {
+        enum class Type {
+            Aggregate,
+            Post,
+            Simple,
+        };
+
+        //
+
+        const std::string name;
+        const Type type;
+
+        Link(const std::string& name_,
+             Type type_);
+
+        //
+
+        static Type parse(std::string typeString);
+        static std::string typeToString(Type type);
+    };
+
+
+
+    //
+
     ~Artifact() override;
 
     const std::string& name() const;
 
-    void recalculate(const std::string& stepName);
+    void recalculate();
+    void completeStep(const std::string& stepName,
+                      Link::Type linkType);
 
-    void setManaged();
-    void setTouched(const std::string& stepName);
-    std::vector<std::string> getManagedList() const;
+    void restoreMark(const std::string& stepName,
+                     Link::Type type);
+    std::vector<Link> getMarks() const;
 
-    bool checkInvalidation(Master& master,
+    void checkInvalidation(Master& master,
                            const std::string& stepName,
-                           bool rebuildNeeded);
+                           Link::Type linkType);
 
 protected:
     Artifact(const std::string& name,

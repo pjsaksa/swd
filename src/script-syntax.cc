@@ -6,6 +6,7 @@
 
 #include "script-syntax.hh"
 
+#include "script.hh"
 #include "utils/string.hh"
 
 using namespace std;
@@ -56,12 +57,6 @@ void syntax::checkArtifact(const string& name,
             for (const auto& ex : j["exclude"]) {
                 ASSERT(ex.is_string(), "artifact[type=directory]/exclude/* must be strings");
             }
-        }
-
-        // [type=directory]/exclude
-
-        if (j.count("managed") > 0) {
-            ASSERT(j["managed"].is_boolean(), "artifact[type=directory]/managed must be a boolean");
         }
     }
 }
@@ -157,18 +152,27 @@ void syntax::checkStep(const json& j)
         }
     }
 
-    // artifacts (pointers)
+    // artifacts (links)
 
     if (j.count("artifacts") > 0) {
-        ASSERT(j["artifacts"].is_array(), "step's artifact pointer container must be an array");
+        ASSERT(j["artifacts"].is_object(), "step's artifact link container must be an object");
 
-        for (const auto& j_artId : j["artifacts"])
+        for (const auto& artIter : j["artifacts"].items())
         {
-            ASSERT(j_artId.is_string(), "step's artifact pointer must be a string");
+            const std::string& linkId = artIter.key();
+            const json& j_linkType = artIter.value();
 
-            const string artId = j_artId.get<string>();
+            ASSERT(linkId.empty() == false, "step's artifact link id must not be empty");
+            ASSERT(j_linkType.is_string(),  "step's artifact link type must be a string");
 
-            ASSERT(artId.empty() == false, "steps' artifact pointer must not be empty");
+            const std::string linkType = j_linkType.get<string>();
+
+            try {
+                Step::ArtifactLink::parse(linkType);
+            }
+            catch (std::range_error&) {
+                throw syntax::syntax_error("step's artifact link type is unknown: " + linkType);
+            }
         }
     }
 

@@ -159,6 +159,10 @@ public:
 
     //
 
+    using ArtifactLink = Artifact::Link;
+
+    //
+
     Step(const std::string& name,
          Script& parent,
          Flags flags);
@@ -170,8 +174,9 @@ public:
     void complete();
     void undo();
 
-    bool hasArtifact(const std::string& artifact);
-    void addArtifact(const std::string& artifact);
+    bool hasArtifactLink(const std::string& artifactName);
+    void addArtifactLink(const std::string& artifactName,
+                         ArtifactLink::Type pointerType);
     void addDependency(unique_dependency_t&& dependency);
 
     void apply(const Visitor& visitor) override;
@@ -187,7 +192,7 @@ private:
     const Flags m_flags;
     bool m_completed = false;
 
-    std::vector<std::string> m_artifacts;
+    std::vector<ArtifactLink> m_artifacts;
     std::vector<unique_dependency_t> m_dependencies;
 
     //

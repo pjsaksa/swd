@@ -9,9 +9,10 @@
 #include "master.hh"
 #include "script-tools.hh"
 #include "script.hh"
+#include "utils/string.hh"
 
 #include <algorithm>
-#include <set>
+#include <map>
 #include <stdexcept>
 
 const std::string HashCache::TargetDoesNotExist = "<does-not-exist>";
@@ -46,37 +47,111 @@ std::string HashCache::getHashSum() const
 
 class Artifact::Manager {
 public:
-    void touch(const std::string& stepName)
+    void touch(const std::string& stepName,
+               const Link::Type type)
     {
-        m_steps.insert(stepName);
+        m_marks[stepName] = type;
     }
 
-    bool stepFound(const std::string& stepName) const
+    bool stepFound(const std::string& stepName,
+                   const Link::Type type) const
     {
-        return m_steps.count(stepName) > 0;
+        const auto iter = m_marks.find(stepName);
+
+        return iter != m_marks.end()
+            && iter->second == type;
     }
 
-    void invalidate(Master& master)
+    void invalidate(Master& master,
+                    const Link::Type type)
     {
-        std::for_each(m_steps.begin(),
-                      m_steps.end(),
-                      [&master] (const std::string& stepName)
-                      {
-                          tools::undo(master, stepName);
-                      });
+        // sanity check
 
-        m_steps.clear();
+        if (type != Link::Type::Aggregate
+            && type != Link::Type::Post)
+        {
+            throw std::logic_error("Artifact::Manager::invalidate(): function called with invalid link type parameter");
+        }
+
+        //
+
+        for (auto iter = m_marks.begin();
+             iter != m_marks.end();
+             )
+        {
+            if ((type == Link::Type::Aggregate
+                 && (iter->second == Link::Type::Aggregate
+                     || iter->second == Link::Type::Post))
+                || (type == Link::Type::Post
+                    && iter->second == Link::Type::Post))
+            {
+                tools::undo(master, iter->first);
+                m_marks.erase(iter++);
+            }
+            else {
+                ++iter;
+            }
+        }
     }
 
-    std::vector<std::string> getAsVector()
+    std::vector<Artifact::Link> getAsVector() const
     {
-        return std::vector<std::string>(m_steps.begin(),
-                                        m_steps.end());
+        std::vector<Link> marks;
+
+        for (const auto& pair : m_marks)
+        {
+            marks.emplace_back( pair.first,
+                                pair.second );
+        }
+
+        return marks;
     }
 
 private:
-    std::set<std::string> m_steps;
+    std::map<std::string, Link::Type> m_marks;
 };
+
+// ------------------------------------------------------------
+
+Artifact::Link::Link(const std::string& name_,
+                     Type type_)
+    : name(name_),
+      type(type_)
+{
+}
+
+Artifact::Link::Type Artifact::Link::parse(std::string typeString)
+{
+    utils::tolower(typeString);
+
+    if (typeString == ""
+        || typeString == "simple")
+    {
+        return Type::Simple;
+    }
+    else if (typeString == "aggregate")
+    {
+        return Type::Aggregate;
+    }
+    else if (typeString == "post")
+    {
+        return Type::Post;
+    }
+    else {
+        throw std::range_error("invalid artifact link type: " + typeString);
+    }
+}
+
+std::string Artifact::Link::typeToString(Type type)
+{
+    switch (type) {
+    case Type::Aggregate: return "aggregate";
+    case Type::Post:      return "post";
+        //
+    default:
+        return "";
+    }
+}
 
 // ------------------------------------------------------------
 
@@ -87,72 +162,66 @@ const std::string& Artifact::name() const
     return m_name;
 }
 
-void Artifact::recalculate(const std::string& stepName)
+void Artifact::recalculate()
 {
     storeHash( calculateHash() );
+}
 
-    if (!stepName.empty()
-        && m_manager)
-    {
-        if (m_manager->stepFound(stepName)) {
-            throw std::runtime_error("Touching managed artifact '" + m_name + "' with step '" + stepName + "' which already exists in managed step list");
-        }
+void Artifact::completeStep(const std::string& stepName,
+                            Link::Type linkType)
+{
+    recalculate();
 
-        m_manager->touch(stepName);
+    //
+
+    switch (linkType) {
+    case Link::Type::Aggregate:
+    case Link::Type::Post:
+        m_manager->touch(stepName,
+                         linkType);
+        break;
+
+    default:
+        break;
     }
 }
 
-void Artifact::setManaged()
+void Artifact::restoreMark(const std::string& stepName,
+                           Link::Type type)
 {
-    if (!m_manager) {
-        m_manager = std::make_unique<Manager>();
-    }
+    m_manager->touch(stepName,
+                     type);
 }
 
-void Artifact::setTouched(const std::string& stepName)
+std::vector<Artifact::Link> Artifact::getMarks() const
 {
-    if (m_manager) {
-        m_manager->touch(stepName);
-    }
+    return m_manager->getAsVector();
 }
 
-std::vector<std::string> Artifact::getManagedList() const
-{
-    return ( m_manager
-             ? m_manager->getAsVector()
-             : std::vector<std::string>() );
-}
-
-bool Artifact::checkInvalidation(Master& master,
+void Artifact::checkInvalidation(Master& master,
                                  const std::string& stepName,
-                                 bool rebuildNeeded)
+                                 Link::Type linkType)
 {
-    // for managed artifacts, maybe rebuild more stuff
+    // maybe rebuild marked steps
 
-    if (m_manager)
+    if (linkType == Link::Type::Aggregate)
     {
-        const bool found = m_manager->stepFound(stepName);
-
-        if (found
-            && rebuildNeeded)
+        if (m_manager->stepFound(stepName, Link::Type::Aggregate))
         {
-            // invalidate artifact and rebuild scope
-
-            m_manager->invalidate(master);
+            m_manager->invalidate(master,
+                                  Link::Type::Aggregate);
 
             throw invalidate_scope(m_scope);
         }
-        else if (!found &&
-                 !rebuildNeeded)
-        {
-            return false;       // this should not happen, but it did
+        else {
+            m_manager->invalidate(master,
+                                  Link::Type::Post);
         }
     }
 
-    // rebuild all linked steps if artifact is not 'up to date'
+    // maybe rebuild *all* linked artifacts
 
-    if (rebuildNeeded
-        && !compareHash(calculateHash(), true))
+    if (!compareHash(calculateHash(), true))
     {
         auto count = tools::rebuildArtifact(master, name());
 
@@ -160,14 +229,13 @@ bool Artifact::checkInvalidation(Master& master,
             throw invalidate_scope(m_scope);
         }
     }
-
-    return true;    // no effect: rebuildNeeded applies
 }
 
 Artifact::Artifact(const std::string& name,
                    const std::string& scope)
     : m_name(name),
-      m_scope(scope)
+      m_scope(scope),
+      m_manager(std::make_unique<Manager>())
 {
 }
 

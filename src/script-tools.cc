@@ -206,9 +206,10 @@ namespace
 
                         if (j_step.count("artifacts") > 0)
                         {
-                            for (auto& j_artifact : j_step["artifacts"])
+                            for (const auto& artIter : j_step["artifacts"].items())
                             {
-                                std::string artifactName = j_artifact.get<std::string>();
+                                std::string artifactName = artIter.key();
+                                const json& j_artLinkType = artIter.value();
 
                                 if (artifactName[0] == '/') {
                                     artifactName.erase(0, 1);
@@ -217,7 +218,10 @@ namespace
                                     artifactName = scriptName + '/' + artifactName;
                                 }
 
-                                newStep.addArtifact(artifactName);
+                                //
+
+                                newStep.addArtifactLink(artifactName,
+                                                        Step::ArtifactLink::parse(j_artLinkType.get<std::string>()));
                             }
                         }
 
@@ -321,14 +325,6 @@ namespace
 
                 m_master.artifacts.emplace(artifactName,
                                            unique_artifact_t(artifact));
-
-                //
-
-                if (value.count("managed") > 0
-                    && value["managed"].get<bool>() == true)
-                {
-                    artifact->setManaged();
-                }
             }
         }
 
@@ -806,7 +802,7 @@ namespace
         void operator() (Step& step) const override
         {
             if (step.isCompleted()
-                && step.hasArtifact(m_artifact))
+                && step.hasArtifactLink(m_artifact))
             {
                 if (m_count == 0) {
                     std::cout << "Rebuilding artifact " << m_artifact << std::endl;
